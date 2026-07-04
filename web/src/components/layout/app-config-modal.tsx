@@ -1,8 +1,8 @@
 "use client";
 
 import { App, Button, Form, Input, Modal, Progress, Segmented, Select, Tabs } from "antd";
-import { CircleAlert, Cloud, Plus, RefreshCw, Trash2, Wifi } from "lucide-react";
-import { useState } from "react";
+import { CircleAlert, Cloud, Plus, RefreshCw, Trash2, Upload, Wifi } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { fetchChannelModels } from "@/services/api/image";
@@ -59,6 +59,7 @@ function createWebdavDomainProgress(): Record<AppSyncDomainKey, WebdavDomainProg
 
 export function AppConfigModal() {
     const { message } = App.useApp();
+    const successSoundInputRef = useRef<HTMLInputElement>(null);
     const [activeTab, setActiveTab] = useState("channels");
     const [loadingChannelId, setLoadingChannelId] = useState("");
     const [testingWebdav, setTestingWebdav] = useState(false);
@@ -68,6 +69,7 @@ export function AppConfigModal() {
     const config = useConfigStore((state) => state.config);
     const webdav = useConfigStore((state) => state.webdav);
     const updateConfig = useConfigStore((state) => state.updateConfig);
+    const updateConfigPatch = useConfigStore((state) => state.updateConfigPatch);
     const updateWebdavConfig = useConfigStore((state) => state.updateWebdavConfig);
     const isConfigOpen = useConfigStore((state) => state.isConfigOpen);
     const shouldPromptContinue = useConfigStore((state) => state.shouldPromptContinue);
@@ -77,7 +79,7 @@ export function AppConfigModal() {
     const webdavReady = Boolean(webdav.url.trim());
 
     const saveConfig = (nextConfig: AiConfig) => {
-        (Object.keys(nextConfig) as Array<keyof AiConfig>).forEach((key) => updateConfig(key, nextConfig[key]));
+        updateConfigPatch(nextConfig);
     };
 
     const finishConfig = () => {
@@ -154,6 +156,22 @@ export function AppConfigModal() {
         const next = uniqueModels(models.map((model) => normalizeModelOptionValue(model, config.channels)).filter(Boolean));
         updateConfig(group.modelsKey, next);
         if (!next.includes(config[group.modelKey])) updateConfig(group.modelKey, next[0] || "");
+    };
+
+    const uploadSuccessSound = (file?: File) => {
+        if (!file) return;
+        if (!file.type.startsWith("audio/")) {
+            message.error("请选择音频文件");
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            updateConfig("imageSuccessSoundUrl", String(reader.result || ""));
+            updateConfig("imageSuccessSoundEnabled", "true");
+            message.success("成功音效已更新");
+        };
+        reader.onerror = () => message.error("读取音效失败");
+        reader.readAsDataURL(file);
     };
 
     const testWebdav = async () => {
@@ -346,6 +364,16 @@ export function AppConfigModal() {
                                             onBlur={(event) => updateConfig("canvasImageCount", normalizeImageCount(event.target.value))}
                                         />
                                     </Form.Item>
+                                    <Form.Item label="生图失败重试次数" extra="留空表示一直重试；填 0 表示不自动重试。" className="mb-4">
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            placeholder="无限"
+                                            value={config.imageRetryCount}
+                                            onChange={(event) => updateConfig("imageRetryCount", event.target.value)}
+                                            onBlur={(event) => updateConfig("imageRetryCount", normalizeRetryCount(event.target.value))}
+                                        />
+                                    </Form.Item>
                                     <Form.Item label="默认音频声音" className="mb-4">
                                         <Select value={config.audioVoice} options={audioVoiceOptions} onChange={(value) => updateConfig("audioVoice", value)} />
                                     </Form.Item>
@@ -362,6 +390,38 @@ export function AppConfigModal() {
                                             onChange={(event) => updateConfig("audioSpeed", event.target.value)}
                                             onBlur={(event) => updateConfig("audioSpeed", normalizeAudioSpeedValue(event.target.value))}
                                         />
+                                    </Form.Item>
+                                    <Form.Item label="生图成功音效" extra="成功时播放；失败不播放。留空使用内置提示音。" className="mb-4 md:col-span-4">
+                                        <div className="grid gap-2 md:grid-cols-[180px_1fr_auto_auto]">
+                                            <Segmented
+                                                block
+                                                value={config.imageSuccessSoundEnabled}
+                                                onChange={(value) => updateConfig("imageSuccessSoundEnabled", value as string)}
+                                                options={[
+                                                    { label: "开启", value: "true" },
+                                                    { label: "关闭", value: "false" },
+                                                ]}
+                                            />
+                                            <Input
+                                                value={config.imageSuccessSoundUrl.startsWith("data:") ? "" : config.imageSuccessSoundUrl}
+                                                placeholder={config.imageSuccessSoundUrl.startsWith("data:") ? "已上传自定义音效" : "音效 URL，留空使用内置"}
+                                                onChange={(event) => updateConfig("imageSuccessSoundUrl", event.target.value)}
+                                            />
+                                            <Button icon={<Upload className="size-4" />} onClick={() => successSoundInputRef.current?.click()}>
+                                                上传
+                                            </Button>
+                                            <Button onClick={() => updateConfig("imageSuccessSoundUrl", "")}>内置</Button>
+                                            <input
+                                                ref={successSoundInputRef}
+                                                type="file"
+                                                accept="audio/*"
+                                                className="hidden"
+                                                onChange={(event) => {
+                                                    uploadSuccessSound(event.target.files?.[0]);
+                                                    event.target.value = "";
+                                                }}
+                                            />
+                                        </div>
                                     </Form.Item>
                                 </div>
                                 <Form.Item label="默认音频指令" className="mb-4">
@@ -471,6 +531,12 @@ function normalizeDefaultModel(value: string, options: string[]) {
 
 function normalizeImageCount(value: string) {
     return String(Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || 3))));
+}
+
+function normalizeRetryCount(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    return String(Math.max(0, Math.floor(Math.abs(Number(trimmed)) || 0)));
 }
 
 function uniqueModels(models: string[]) {

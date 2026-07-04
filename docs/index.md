@@ -6,7 +6,6 @@
 - [功能介绍](/docs/overview/features)
 - [Render 部署](/docs/overview/render)
 - [Docker 部署](/docs/overview/docker)
-- [第三方 GitHub 提示词仓库](/docs/overview/third-party-prompt-repositories)
 
 ## 操作手册
 

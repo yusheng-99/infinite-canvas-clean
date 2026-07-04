@@ -24,35 +24,17 @@ export type ResponseInputMessage =
     | { type: "function_call"; call_id: string; name: string; arguments: string; thoughtSignature?: string }
     | { role: "tool"; tool_call_id: string; content: string };
 
-export type ResponseFunctionTool = {
-    type: "function";
-    function: {
-        name: string;
-        description?: string;
-        parameters: Record<string, unknown>;
-        strict?: boolean;
-    };
-};
-
 export type ToolResponseResult = {
     content: string;
     toolCalls: ResponseToolCall[];
 };
 
-type ToolChoice = "auto" | "required" | { type: "function"; name: string };
 type ResponseMessageContent = AiTextMessage["content"] | string;
 type ResponseInputContent = { type: "input_text"; text: string } | { type: "input_image"; image_url: string };
 type ResponseInputItem =
     | { role: "system" | "user" | "assistant"; content: string | ResponseInputContent[] }
     | { type: "function_call"; call_id: string; name: string; arguments: string }
     | { type: "function_call_output"; call_id: string; output: string };
-type ResponseApiToolDefinition = {
-    type: "function";
-    name: string;
-    description?: string;
-    parameters: Record<string, unknown>;
-    strict?: boolean;
-};
 type ResponseApiOutputItem =
     | { type?: "message"; content?: Array<{ type?: string; text?: string }> }
     | { type?: "function_call"; id?: string; call_id?: string; name?: string; arguments?: string };
@@ -69,6 +51,7 @@ type ResponseStreamState = { buffer: string; text: string; payload?: ResponseApi
 type ImageApiResponse = {
     data?: Array<Record<string, unknown>>;
     error?: { message?: string };
+    detail?: { error?: { message?: string } | string; message?: string } | string;
     code?: number;
     msg?: string;
 };
@@ -90,7 +73,8 @@ type GeminiPayload = {
     promptFeedback?: { blockReason?: string };
 };
 type GeminiStreamState = { buffer: string; text: string; toolCalls: ResponseToolCall[]; error?: string };
-type RequestOptions = { signal?: AbortSignal };
+export type ImageRetryEvent = { retryCount: number; message: string; nextDelayMs: number };
+type RequestOptions = { signal?: AbortSignal; onRetry?: (event: ImageRetryEvent) => void };
 
 const QUALITY_BASE: Record<string, number> = {
     low: 1024,
@@ -209,18 +193,106 @@ function parseImagePayload(payload: ImageApiResponse) {
 
 function readAxiosError(error: unknown, fallback: string) {
     if (axios.isCancel(error)) return "请求已取消";
-    if (axios.isAxiosError<{ error?: { message?: string }; msg?: string; code?: number }>(error)) {
+    if (axios.isAxiosError<ImageApiResponse>(error)) {
         const responseData = error.response?.data;
-        return responseData?.msg || responseData?.error?.message || readStatusError(error.response?.status, fallback);
+        return responseData?.msg || responseData?.error?.message || readDetailError(responseData?.detail) || readStatusError(error.response?.status, fallback);
     }
     if (error instanceof DOMException && error.name === "AbortError") return "请求已取消";
     return error instanceof Error ? error.message : fallback;
+}
+
+function readDetailError(detail: ImageApiResponse["detail"]) {
+    if (!detail) return "";
+    if (typeof detail === "string") return detail;
+    if (typeof detail.error === "string") return detail.error;
+    return detail.error?.message || detail.message || "";
 }
 
 function readStatusError(status: number | undefined, fallback: string) {
     if (status === 401 || status === 403) return "鉴权失败，请检查 API Key、套餐权限或模型权限";
     if (status === 429) return "请求被限流或额度不足，请稍后重试";
     return status ? `${fallback}：${status}` : fallback;
+}
+
+function resolveImageRetryLimit(config: AiConfig) {
+    const value = config.imageRetryCount.trim();
+    if (!value) return Number.POSITIVE_INFINITY;
+    return Math.max(0, Math.floor(Math.abs(Number(value)) || 0));
+}
+
+function isAbortError(error: unknown, options?: RequestOptions) {
+    return options?.signal?.aborted || axios.isCancel(error) || (error instanceof DOMException && error.name === "AbortError");
+}
+
+function isNonRetryableImageError(message: string) {
+    const value = message.toLowerCase();
+    return (
+        value.includes("鉴权失败") ||
+        value.includes("api key") ||
+        value.includes("unsupported image model") ||
+        value.includes("unsupported model") ||
+        value.includes("模型不支持") ||
+        value.includes("暂不支持蒙版") ||
+        value.includes("格式") ||
+        value.includes("尺寸")
+    );
+}
+
+function isImagePoolQuotaExhaustedError(message: string) {
+    const value = message.toLowerCase();
+    return (
+        value.includes("no available image quota") ||
+        value.includes("no available plus image quota") ||
+        value.includes("no available pro image quota") ||
+        value.includes("no available team image quota") ||
+        value.includes("no available codex image quota") ||
+        value.includes("no account in the pool could generate images") ||
+        value.includes("号池中没有可用账号") ||
+        value.includes("账号池没有可用账号") ||
+        value.includes("账号池额度")
+    );
+}
+
+function imageRetryDelayMs(attempt: number) {
+    return Math.min(30000, 1000 * 2 ** Math.min(attempt - 1, 5));
+}
+
+function sleepWithAbort(ms: number, signal?: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new DOMException("请求已取消", "AbortError"));
+            return;
+        }
+        const timeoutId = window.setTimeout(resolve, ms);
+        const abort = () => {
+            window.clearTimeout(timeoutId);
+            reject(new DOMException("请求已取消", "AbortError"));
+        };
+        signal?.addEventListener("abort", abort, { once: true });
+    });
+}
+
+async function requestImageWithRetry<T>(config: AiConfig, action: () => Promise<T>, options?: RequestOptions) {
+    const retryLimit = resolveImageRetryLimit(config);
+    let retryCount = 0;
+    let consecutivePoolExhaustedErrors = 0;
+    for (;;) {
+        try {
+            return await action();
+        } catch (error) {
+            const message = readAxiosError(error, "请求失败");
+            const poolQuotaExhaustedError = isImagePoolQuotaExhaustedError(message);
+            consecutivePoolExhaustedErrors = poolQuotaExhaustedError ? consecutivePoolExhaustedErrors + 1 : 0;
+            if (isAbortError(error, options) || isNonRetryableImageError(message) || consecutivePoolExhaustedErrors >= 3 || retryCount >= retryLimit) {
+                throw new Error(message);
+            }
+            retryCount += 1;
+            const nextDelayMs = imageRetryDelayMs(retryCount);
+            options?.onRetry?.({ retryCount, message, nextDelayMs });
+            console.warn(`Image generation failed, retrying (${retryCount}${Number.isFinite(retryLimit) ? `/${retryLimit}` : ""})`, message);
+            await sleepWithAbort(nextDelayMs, options?.signal);
+        }
+    }
 }
 
 function withSystemPrompt(config: AiConfig, prompt: string) {
@@ -278,16 +350,6 @@ function toResponseInput(messages: ResponseInputMessage[]): ResponseInputItem[] 
 function toResponseContent(content: ResponseMessageContent): string | ResponseInputContent[] {
     if (!Array.isArray(content)) return String(content || "");
     return content.map((item) => (item.type === "text" ? { type: "input_text" as const, text: item.text } : { type: "input_image" as const, image_url: item.image_url.url }));
-}
-
-function toResponseTool(tool: ResponseFunctionTool): ResponseApiToolDefinition {
-    return {
-        type: "function",
-        name: tool.function.name,
-        description: tool.function.description,
-        parameters: tool.function.parameters,
-        strict: tool.function.strict,
-    };
 }
 
 function parseToolResponse(payload: ResponseApiPayload): ToolResponseResult {
@@ -476,23 +538,6 @@ function jsonValue(value: string): unknown {
     }
 }
 
-function toGeminiToolOptions(tools: ResponseFunctionTool[], toolChoice: ToolChoice) {
-    if (!tools.length) return {};
-    const functionDeclarations = tools.map((tool) => ({
-        name: tool.function.name,
-        description: tool.function.description,
-        parameters: tool.function.parameters,
-    }));
-    const functionCallingConfig =
-        typeof toolChoice === "object"
-            ? { mode: "ANY", allowedFunctionNames: [toolChoice.name] }
-            : { mode: toolChoice === "required" ? "ANY" : "AUTO" };
-    return {
-        tools: [{ functionDeclarations }],
-        toolConfig: { functionCallingConfig },
-    };
-}
-
 async function requestGeminiStreamingResponse(config: AiConfig, body: Record<string, unknown>, onDelta?: (text: string) => void, options?: RequestOptions): Promise<ToolResponseResult> {
     const response = await fetch(`${geminiApiUrl(config, "streamGenerateContent")}?alt=sse`, {
         method: "POST",
@@ -610,76 +655,70 @@ function parseGeminiImagePayload(payload: GeminiPayload) {
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
     const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
-    if (requestConfig.apiFormat === "gemini") {
-        try {
-            return await requestGeminiImages(requestConfig, prompt, [], n, options);
-        } catch (error) {
-            throw new Error(readAxiosError(error, "请求失败"));
-        }
-    }
-    const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(quality, config.size);
-    try {
-        const response = await axios.post<ImageApiResponse>(
-            aiApiUrl(requestConfig, "/images/generations"),
-            {
-                model: requestConfig.model,
-                prompt: withSystemPrompt(requestConfig, prompt),
-                n,
-                ...(quality ? { quality } : {}),
-                ...(requestSize ? { size: requestSize } : {}),
-                response_format: "b64_json",
-                output_format: IMAGE_OUTPUT_FORMAT,
-            },
-            {
-                headers: aiHeaders(requestConfig, "application/json"),
-                signal: options?.signal,
-            },
-        );
-        const images = parseImagePayload(response.data);
-        return images;
-    } catch (error) {
-        throw new Error(readAxiosError(error, "请求失败"));
-    }
+    return requestImageWithRetry(
+        config,
+        async () => {
+            if (requestConfig.apiFormat === "gemini") {
+                return await requestGeminiImages(requestConfig, prompt, [], n, options);
+            }
+            const quality = normalizeQuality(config.quality);
+            const requestSize = resolveRequestSize(quality, config.size);
+            const response = await axios.post<ImageApiResponse>(
+                aiApiUrl(requestConfig, "/images/generations"),
+                {
+                    model: requestConfig.model,
+                    prompt: withSystemPrompt(requestConfig, prompt),
+                    n,
+                    ...(quality ? { quality } : {}),
+                    ...(requestSize ? { size: requestSize } : {}),
+                    response_format: "b64_json",
+                    output_format: IMAGE_OUTPUT_FORMAT,
+                },
+                {
+                    headers: aiHeaders(requestConfig, "application/json"),
+                    signal: options?.signal,
+                },
+            );
+            return parseImagePayload(response.data);
+        },
+        options,
+    );
 }
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
     const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const requestPrompt = buildImageReferencePromptText(prompt, references);
-    if (requestConfig.apiFormat === "gemini") {
-        if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
-        try {
-            return await requestGeminiImages(requestConfig, requestPrompt, references, n, options);
-        } catch (error) {
-            throw new Error(readAxiosError(error, "请求失败"));
-        }
-    }
-    const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(quality, config.size);
-    const formData = new FormData();
-    formData.set("model", requestConfig.model);
-    formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
-    formData.set("n", String(n));
-    formData.set("response_format", "b64_json");
-    formData.set("output_format", IMAGE_OUTPUT_FORMAT);
-    if (quality) {
-        formData.set("quality", quality);
-    }
-    if (requestSize) {
-        formData.set("size", requestSize);
-    }
-    const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
-    files.forEach((file) => formData.append("image", file));
-    if (mask) formData.set("mask", dataUrlToFile(mask));
+    return requestImageWithRetry(
+        config,
+        async () => {
+            const requestPrompt = buildImageReferencePromptText(prompt, references);
+            if (requestConfig.apiFormat === "gemini") {
+                if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
+                return await requestGeminiImages(requestConfig, requestPrompt, references, n, options);
+            }
+            const quality = normalizeQuality(config.quality);
+            const requestSize = resolveRequestSize(quality, config.size);
+            const formData = new FormData();
+            formData.set("model", requestConfig.model);
+            formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
+            formData.set("n", String(n));
+            formData.set("response_format", "b64_json");
+            formData.set("output_format", IMAGE_OUTPUT_FORMAT);
+            if (quality) {
+                formData.set("quality", quality);
+            }
+            if (requestSize) {
+                formData.set("size", requestSize);
+            }
+            const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
+            files.forEach((file) => formData.append("image", file));
+            if (mask) formData.set("mask", dataUrlToFile(mask));
 
-    try {
-        const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { headers: aiHeaders(requestConfig), signal: options?.signal });
-        const images = parseImagePayload(response.data);
-        return images;
-    } catch (error) {
-        throw new Error(readAxiosError(error, "请求失败"));
-    }
+            const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { headers: aiHeaders(requestConfig), signal: options?.signal });
+            return parseImagePayload(response.data);
+        },
+        options,
+    );
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
@@ -696,24 +735,6 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
         }, onDelta, options)).content || "没有返回内容";
         if (answer === "没有返回内容") onDelta(answer);
         return answer;
-    } catch (error) {
-        throw new Error(readAxiosError(error, "请求失败"));
-    }
-}
-
-export async function requestToolResponse(config: AiConfig, messages: ResponseInputMessage[], tools: ResponseFunctionTool[], toolChoice: ToolChoice = "auto", onDelta?: (text: string) => void, options?: RequestOptions): Promise<ToolResponseResult> {
-    const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
-    try {
-        if (requestConfig.apiFormat === "gemini") {
-            return await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages, toGeminiToolOptions(tools, toolChoice)), onDelta, options);
-        }
-        return await requestStreamingResponse(requestConfig, {
-            model: requestConfig.model,
-            input: toResponseInput(withSystemMessage(requestConfig, messages)),
-            tools: tools.map(toResponseTool),
-            tool_choice: toolChoice,
-            parallel_tool_calls: false,
-        }, onDelta, options);
     } catch (error) {
         throw new Error(readAxiosError(error, "请求失败"));
     }

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronRight, Image as ImageIcon, Music2, RefreshCw, Star, Video } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, Music2, Pause, RefreshCw, Star, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
@@ -44,6 +44,7 @@ type CanvasNodeProps = {
     onToggleBatch?: (nodeId: string) => void;
     onSetBatchPrimary?: (node: CanvasNodeData) => void;
     onRetry?: (node: CanvasNodeData) => void;
+    onStopGeneration?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
     onViewImage?: (node: CanvasNodeData) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
@@ -64,6 +65,7 @@ type NodeContentRendererProps = {
     onStopEditing: () => void;
     mentionReferences: CanvasResourceReference[];
     onRetry?: (node: CanvasNodeData) => void;
+    onStopGeneration?: (node: CanvasNodeData) => void;
     onGenerateImage?: (node: CanvasNodeData) => void;
     onToggleBatch?: () => void;
     onSetBatchPrimary?: () => void;
@@ -99,6 +101,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onToggleBatch,
     onSetBatchPrimary,
     onRetry,
+    onStopGeneration,
     onGenerateImage,
     onViewImage,
     onContextMenu,
@@ -109,7 +112,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
-    const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
+    const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 0;
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const imageBorderColor = isActive ? selectionBlue : isRelated && !isBatchChild ? theme.node.muted : "transparent";
@@ -309,6 +312,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onContentChange={onContentChange}
                         onStopEditing={() => setIsEditingContent(false)}
                         onRetry={onRetry}
+                        onStopGeneration={onStopGeneration}
                         onGenerateImage={onGenerateImage}
                         onToggleBatch={() => onToggleBatch?.(data.id)}
                         onSetBatchPrimary={() => onSetBatchPrimary?.(data)}
@@ -316,7 +320,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 </div>
 
                 {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
-                {resourceLabel ? <ResourceLabelBadge reference={resourceLabel} /> : null}
+                {resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} /> : null}
 
                 {!hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
 
@@ -337,7 +341,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
-    if (props.node.metadata?.status === "loading") return <LoadingContent theme={props.theme} />;
+    if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onStopGeneration={props.onStopGeneration} />;
     if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />;
 
     const Renderer = nodeContentRenderers[props.node.type];
@@ -352,18 +356,21 @@ const nodeContentRenderers = {
     [CanvasNodeType.Audio]: AudioNodeContent,
 } satisfies Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>;
 
-function LoadingContent({ theme }: Pick<NodeContentRendererProps, "theme">) {
+function LoadingContent({ node, theme, onStopGeneration }: Pick<NodeContentRendererProps, "node" | "theme" | "onStopGeneration">) {
     return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
+        <div className="relative flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
             <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
             <span className="text-[10px] tracking-[0.2em]">生成中</span>
+            {node.metadata?.retryMessage && !node.metadata?.isRetrying ? <span className="max-w-[calc(100%-32px)] truncate text-[10px] opacity-70">{node.metadata.retryMessage}</span> : null}
+            <GenerationRetryBadge node={node} />
+            <GenerationPauseButton node={node} theme={theme} onStopGeneration={onStopGeneration} />
         </div>
     );
 }
 
 function ErrorContent({ node, theme, onRetry }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry">) {
     return (
-        <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-5 text-center">
             <div className="text-xs leading-5 text-red-300">{node.metadata?.errorDetails || "生成失败"}</div>
             <button
                 type="button"
@@ -454,7 +461,7 @@ function ImageNodeContent(props: NodeContentRendererProps) {
     if (!props.node.metadata?.content && props.isBatchRoot) {
         const content =
             props.node.metadata?.status === "loading" ? (
-                <LoadingContent theme={props.theme} />
+                <LoadingContent node={props.node} theme={props.theme} onStopGeneration={props.onStopGeneration} />
             ) : props.node.metadata?.status === "error" ? (
                 <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} />
             ) : (
@@ -478,6 +485,8 @@ function ImageNodeContent(props: NodeContentRendererProps) {
             batchRecovering={props.batchRecovering}
             onToggleBatch={props.onToggleBatch}
             onSetBatchPrimary={props.onSetBatchPrimary}
+            onRegenerate={props.onRetry}
+            onStopGeneration={props.onStopGeneration}
         />
     );
 }
@@ -539,6 +548,8 @@ function ImageContent({
     batchRecovering,
     onToggleBatch,
     onSetBatchPrimary,
+    onRegenerate,
+    onStopGeneration,
 }: {
     node: CanvasNodeData;
     isBatchRoot: boolean;
@@ -548,21 +559,49 @@ function ImageContent({
     batchRecovering: boolean;
     onToggleBatch?: () => void;
     onSetBatchPrimary?: () => void;
+    onRegenerate?: (node: CanvasNodeData) => void;
+    onStopGeneration?: (node: CanvasNodeData) => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const isBatchChild = Boolean(node.metadata?.batchRootId);
+    const canRegenerate = Boolean(onRegenerate && node.metadata?.generationType && node.metadata?.prompt && node.metadata?.status !== "loading");
+    const imageSrc = String(node.metadata?.content || "").trim();
 
     return (
         <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} onToggleBatch={onToggleBatch}>
             <div className="h-full w-full overflow-hidden rounded-3xl">
-                <img
-                    src={node.metadata!.content!}
-                    alt={node.title}
-                    draggable={false}
-                    onDragStart={(event) => event.preventDefault()}
-                    className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
-                />
+                {imageSrc ? (
+                    <img
+                        src={imageSrc}
+                        alt={node.title}
+                        draggable={false}
+                        onDragStart={(event) => event.preventDefault()}
+                        className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
+                    />
+                ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
+                        <ImageIcon className="size-7 opacity-35" />
+                        <span className="text-sm">空图片节点</span>
+                    </div>
+                )}
             </div>
+            {canRegenerate ? (
+                <button
+                    type="button"
+                    className="absolute left-3 top-3 z-30 flex size-9 items-center justify-center rounded-full border shadow-[0_8px_20px_rgba(15,23,42,.16)] backdrop-blur-md transition hover:scale-[1.04]"
+                    style={{ background: `${theme.toolbar.panel}e6`, borderColor: `${theme.toolbar.border}dd`, color: theme.node.text }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onRegenerate?.(node);
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    title={node.metadata?.generationType === "edit" ? "用原图片和修改提示重新生成" : "用原提示词重新生成"}
+                    aria-label={node.metadata?.generationType === "edit" ? "用原图片和修改提示重新生成" : "用原提示词重新生成"}
+                >
+                    <RefreshCw className="size-4" />
+                </button>
+            ) : null}
             {isBatchRoot ? (
                 <button
                     type="button"
@@ -596,6 +635,8 @@ function ImageContent({
                     设为主图
                 </button>
             ) : null}
+            <GenerationRetryBadge node={node} />
+            {node.metadata?.status === "loading" ? <GenerationPauseButton node={node} theme={theme} onStopGeneration={onStopGeneration} /> : null}
         </BatchFrame>
     );
 }
@@ -604,13 +645,51 @@ function ImageInfoBar({ node }: { node: CanvasNodeData }) {
     const width = Math.round(node.metadata?.naturalWidth || node.width);
     const height = Math.round(node.metadata?.naturalHeight || node.height);
     const size = formatBytes(node.metadata?.bytes || 0);
+    const retryCount = node.metadata?.isBatchRoot ? 0 : node.metadata?.retryCount || 0;
     return (
-        <div className="pointer-events-none absolute bottom-3 right-3 z-40 max-w-[calc(100%-24px)]">
+        <div className={`pointer-events-none absolute right-3 z-40 max-w-[calc(100%-24px)] ${node.metadata?.status === "loading" ? "bottom-14" : "bottom-3"}`}>
             <span className="max-w-full truncate rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium leading-none text-white backdrop-blur-sm">
                 {width} x {height}
                 {size ? ` · ${size}` : ""}
+                {retryCount > 0 ? ` · 重试 ${retryCount} 次` : ""}
             </span>
         </div>
+    );
+}
+
+function GenerationRetryBadge({ node }: { node: CanvasNodeData }) {
+    if (node.metadata?.isBatchRoot) return null;
+    const retryCount = node.metadata?.retryCount || 0;
+    if (retryCount <= 0) return null;
+    const text = node.metadata?.isRetrying && node.metadata?.status === "loading" ? `第 ${retryCount} 次重试中` : `重试 ${retryCount} 次`;
+    const message = node.metadata?.isRetrying ? node.metadata?.retryMessage : undefined;
+    return (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-40 max-w-[calc(100%-72px)]">
+            <span className="block max-w-full truncate rounded-md bg-black/60 px-2 py-1 text-[11px] font-medium leading-none text-white backdrop-blur-sm" title={message ? `${text}：${message}` : text}>
+                {message ? `${text}：${message}` : text}
+            </span>
+        </div>
+    );
+}
+
+function GenerationPauseButton({ node, theme, onStopGeneration }: Pick<NodeContentRendererProps, "node" | "theme" | "onStopGeneration">) {
+    if (node.metadata?.status !== "loading" || !onStopGeneration) return null;
+    return (
+        <button
+            type="button"
+            className="absolute bottom-3 right-3 z-50 flex size-9 items-center justify-center rounded-full border shadow-[0_8px_20px_rgba(15,23,42,.18)] backdrop-blur-md transition hover:scale-[1.04]"
+            style={{ background: `${theme.toolbar.panel}e6`, borderColor: `${theme.toolbar.border}dd`, color: theme.node.text }}
+            onClick={(event) => {
+                event.stopPropagation();
+                onStopGeneration(node);
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            title={node.metadata?.isBatchRoot ? "暂停整组生成" : "暂停当前图片生成"}
+            aria-label={node.metadata?.isBatchRoot ? "暂停整组生成" : "暂停当前图片生成"}
+        >
+            <Pause className="size-4" />
+        </button>
     );
 }
 

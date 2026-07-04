@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
+import { saveServerAiConfig } from "@/services/app-config-storage";
 
 export type ApiCallFormat = "openai" | "gemini";
 
@@ -45,6 +46,9 @@ export type AiConfig = {
     size: string;
     count: string;
     canvasImageCount: string;
+    imageRetryCount: string;
+    imageSuccessSoundEnabled: string;
+    imageSuccessSoundUrl: string;
 };
 
 export type WebdavSyncConfig = {
@@ -61,6 +65,7 @@ export type ModelCapability = "image" | "video" | "text" | "audio";
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+let serverSavePromise: Promise<void> = Promise.resolve();
 
 export const defaultConfig: AiConfig = {
     channelMode: "local",
@@ -97,9 +102,12 @@ export const defaultConfig: AiConfig = {
     textModels: ["default::gpt-5.5"],
     audioModels: ["default::gpt-4o-mini-tts"],
     quality: "auto",
-    size: "1:1",
+    size: "auto",
     count: "1",
     canvasImageCount: "3",
+    imageRetryCount: "",
+    imageSuccessSoundEnabled: "true",
+    imageSuccessSoundUrl: "",
 };
 
 export const defaultWebdavSyncConfig: WebdavSyncConfig = {
@@ -117,6 +125,7 @@ type ConfigStore = {
     isConfigOpen: boolean;
     shouldPromptContinue: boolean;
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
+    updateConfigPatch: (patch: Partial<AiConfig>) => void;
     updateWebdavConfig: <K extends keyof WebdavSyncConfig>(key: K, value: WebdavSyncConfig[K]) => void;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
     openConfigDialog: (shouldPromptContinue?: boolean) => void;
@@ -177,12 +186,23 @@ export const useConfigStore = create<ConfigStore>()(
             isConfigOpen: false,
             shouldPromptContinue: false,
             updateConfig: (key, value) =>
-                set((state) => ({
-                    config: {
+                set((state) => {
+                    const config = {
                         ...state.config,
                         [key]: value,
-                    },
-                })),
+                    };
+                    saveConfigToServer(config);
+                    return { config };
+                }),
+            updateConfigPatch: (patch) =>
+                set((state) => {
+                    const config = {
+                        ...state.config,
+                        ...patch,
+                    };
+                    saveConfigToServer(config);
+                    return { config };
+                }),
             updateWebdavConfig: (key, value) =>
                 set((state) => ({
                     webdav: {
@@ -202,48 +222,77 @@ export const useConfigStore = create<ConfigStore>()(
                 const persistedState = (persisted || {}) as Partial<ConfigStore>;
                 const persistedConfig = (persistedState.config || {}) as Partial<AiConfig>;
                 const persistedWebdav = (persistedState.webdav || {}) as Partial<WebdavSyncConfig>;
-                const config = { ...defaultConfig, ...persistedConfig };
-                if (!Array.isArray(persistedConfig.channels)) config.channels = [];
-                const channels = normalizeChannels(config);
-                const models = modelOptionsFromChannels(channels);
                 return {
                     ...current,
                     webdav: { ...defaultWebdavSyncConfig, ...persistedWebdav },
-                    config: {
-                        ...config,
-                        channelMode: "local",
-                        apiFormat: normalizeApiFormat(config.apiFormat),
-                        channels,
-                        models,
-                        imageModel: normalizeModelOptionValue(config.imageModel || config.model, channels),
-                        videoModel: normalizeModelOptionValue(config.videoModel || "grok-imagine-video", channels),
-                        textModel: normalizeModelOptionValue(config.textModel || config.model, channels),
-                        audioModel: normalizeModelOptionValue(config.audioModel || defaultConfig.audioModel, channels),
-                        audioVoice: config.audioVoice || defaultConfig.audioVoice,
-                        audioFormat: config.audioFormat || defaultConfig.audioFormat,
-                        audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
-                        audioInstructions: config.audioInstructions || "",
-                        videoSeconds: config.videoSeconds || "6",
-                        vquality: config.vquality || "720",
-                        videoGenerateAudio: config.videoGenerateAudio || "true",
-                        videoWatermark: config.videoWatermark || "false",
-                        canvasImageCount: config.canvasImageCount || "3",
-                        imageModels: Array.isArray(persistedConfig.imageModels) ? normalizeModelList(config.imageModels, channels) : filterModelsByCapability(models, "image"),
-                        videoModels: Array.isArray(persistedConfig.videoModels) ? normalizeModelList(config.videoModels, channels) : filterModelsByCapability(models, "video"),
-                        textModels: Array.isArray(persistedConfig.textModels) ? normalizeModelList(config.textModels, channels) : filterModelsByCapability(models, "text"),
-                        audioModels: Array.isArray(persistedConfig.audioModels) ? normalizeModelList(config.audioModels, channels) : filterModelsByCapability(models, "audio"),
-                    },
+                    config: normalizeAiConfig(persistedConfig),
                 };
             },
         },
     ),
 );
 
+function saveConfigToServer(config: AiConfig) {
+    if (typeof window === "undefined") return;
+    serverSavePromise = serverSavePromise.then(() => saveServerAiConfig(config)).catch(() => {});
+}
+
 function normalizeModelList(models: string[], channels: ModelChannel[]) {
     const allModelOptions = channels.flatMap((channel) => channel.models.map((model) => encodeChannelModel(channel.id, model)));
     return Array.from(new Set((models || []).map((model) => model.trim()).filter(Boolean)))
         .map((model) => normalizeModelOptionValue(model, channels))
         .filter((model) => !allModelOptions.length || allModelOptions.includes(model) || !isChannelModelValue(model));
+}
+
+export function normalizeAiConfig(source: Partial<AiConfig> = {}): AiConfig {
+    const config = { ...defaultConfig, ...source };
+    if (!Array.isArray(source.channels)) config.channels = [];
+    const channels = normalizeChannels(config as AiConfig);
+    const models = modelOptionsFromChannels(channels);
+    return {
+        ...(config as AiConfig),
+        channelMode: "local",
+        apiFormat: normalizeApiFormat(config.apiFormat),
+        channels,
+        models,
+        model: normalizeModelOptionValue(config.model || defaultConfig.model, channels),
+        imageModel: normalizeModelOptionValue(config.imageModel || config.model || defaultConfig.imageModel, channels),
+        videoModel: normalizeModelOptionValue(config.videoModel || defaultConfig.videoModel, channels),
+        textModel: normalizeModelOptionValue(config.textModel || config.model || defaultConfig.textModel, channels),
+        audioModel: normalizeModelOptionValue(config.audioModel || defaultConfig.audioModel, channels),
+        audioVoice: config.audioVoice || defaultConfig.audioVoice,
+        audioFormat: config.audioFormat || defaultConfig.audioFormat,
+        audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
+        audioInstructions: config.audioInstructions || "",
+        videoSeconds: config.videoSeconds || "6",
+        vquality: config.vquality || "720",
+        videoGenerateAudio: config.videoGenerateAudio || "true",
+        videoWatermark: config.videoWatermark || "false",
+        canvasImageCount: config.canvasImageCount || "3",
+        imageRetryCount: config.imageRetryCount ?? "",
+        imageSuccessSoundEnabled: config.imageSuccessSoundEnabled ?? "true",
+        imageSuccessSoundUrl: config.imageSuccessSoundUrl || "",
+        imageModels: Array.isArray(source.imageModels) ? normalizeModelList(config.imageModels, channels) : filterModelsByCapability(models, "image"),
+        videoModels: Array.isArray(source.videoModels) ? normalizeModelList(config.videoModels, channels) : filterModelsByCapability(models, "video"),
+        textModels: Array.isArray(source.textModels) ? normalizeModelList(config.textModels, channels) : filterModelsByCapability(models, "text"),
+        audioModels: Array.isArray(source.audioModels) ? normalizeModelList(config.audioModels, channels) : filterModelsByCapability(models, "audio"),
+    };
+}
+
+export function mergeAiConfigs(localConfig: Partial<AiConfig>, serverConfig: Partial<AiConfig>) {
+    const local = normalizeAiConfig(localConfig);
+    const server = normalizeAiConfig(serverConfig);
+    const channels = mergeChannels(local.channels, server.channels);
+    return normalizeAiConfig({
+        ...local,
+        ...server,
+        channels,
+        models: modelOptionsFromChannels(channels),
+        imageModels: uniqueModelOptions([...local.imageModels, ...server.imageModels]),
+        videoModels: uniqueModelOptions([...local.videoModels, ...server.videoModels]),
+        textModels: uniqueModelOptions([...local.textModels, ...server.textModels]),
+        audioModels: uniqueModelOptions([...local.audioModels, ...server.audioModels]),
+    });
 }
 
 export function useEffectiveConfig() {
@@ -352,6 +401,16 @@ function normalizeChannels(config: AiConfig) {
         );
     }
     return channels.map((channel) => ({ ...channel, models: uniqueRawModels(channel.models) }));
+}
+
+function mergeChannels(localChannels: ModelChannel[], serverChannels: ModelChannel[]) {
+    const channels = new Map<string, ModelChannel>();
+    for (const channel of localChannels) channels.set(channel.id, channel);
+    for (const channel of serverChannels) {
+        const existing = channels.get(channel.id);
+        channels.set(channel.id, existing ? { ...existing, ...channel, models: uniqueRawModels([...existing.models, ...channel.models]) } : channel);
+    }
+    return Array.from(channels.values());
 }
 
 export function defaultBaseUrlForApiFormat(apiFormat: ApiCallFormat) {

@@ -13,10 +13,6 @@ export async function testWebdavConnection(config: WebdavSyncConfig) {
     await throwWebdavError(response, "WebDAV 连接测试失败");
 }
 
-export async function downloadWebdavSyncFile(config: WebdavSyncConfig) {
-    return downloadWebdavFile(config, WEBDAV_MANIFEST_FILE_NAME);
-}
-
 export async function downloadWebdavFile(config: WebdavSyncConfig, path: string) {
     await ensureWebdavDirectory(config);
     const response = await webdavFetch(config, path, { method: "GET" });
@@ -24,10 +20,6 @@ export async function downloadWebdavFile(config: WebdavSyncConfig, path: string)
     if (!response.ok) await throwWebdavError(response, "读取 WebDAV 同步文件失败");
     const file = await withTimeout(response.blob(), "读取 WebDAV 同步文件超时");
     return file.size ? file : null;
-}
-
-export async function uploadWebdavSyncFile(config: WebdavSyncConfig, file: Blob) {
-    return uploadWebdavFile(config, WEBDAV_MANIFEST_FILE_NAME, file, "application/json");
 }
 
 export async function uploadWebdavFile(config: WebdavSyncConfig, path: string, file: Blob, contentType = "application/octet-stream") {

@@ -50,6 +50,7 @@ export default function AssetsPage() {
     const [isAssetOpen, setIsAssetOpen] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [deletingAsset, setDeletingAsset] = useState<Asset | null>(null);
+    const [renamingAsset, setRenamingAsset] = useState<Asset | null>(null);
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
@@ -187,6 +188,15 @@ export default function AssetsPage() {
         setDeletingAsset(null);
     };
 
+    const renameAsset = (asset: Asset, title: string) => {
+        const nextTitle = title.trim();
+        if (!nextTitle) return;
+        updateAsset(asset.id, { title: nextTitle });
+        setPreviewAsset((current) => (current?.id === asset.id ? { ...current, title: nextTitle, updatedAt: new Date().toISOString() } : current));
+        setRenamingAsset(null);
+        message.success("素材已重命名");
+    };
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-background text-stone-900 dark:text-stone-100">
             <main className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] px-6 py-8 [background-size:16px_16px] dark:bg-[radial-gradient(rgba(245,245,244,.14)_1px,transparent_1px)]">
@@ -224,7 +234,7 @@ export default function AssetsPage() {
                                         <Tag.CheckableTag
                                             key={option.value}
                                             checked={kindFilter === option.value}
-                                            className={cn("prompt-filter-tag", kindFilter === option.value && "is-active")}
+                                            className={cn("filter-tag", kindFilter === option.value && "is-active")}
                                             onChange={() => {
                                                 setPage(1);
                                                 setKindFilter(option.value as AssetKind | "all");
@@ -265,7 +275,7 @@ export default function AssetsPage() {
                 <div className="mx-auto flex max-w-7xl flex-col gap-5">
                     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {visibleAssets.map((asset) => (
-                            <AssetCard key={asset.id} asset={asset} onOpen={() => setPreviewAsset(asset)} onEdit={() => openEdit(asset)} onCopy={copyAssetText} onDownload={downloadImage} onDelete={() => setDeletingAsset(asset)} />
+                            <AssetCard key={asset.id} asset={asset} onOpen={() => setPreviewAsset(asset)} onEdit={() => openEdit(asset)} onRename={() => setRenamingAsset(asset)} onCopy={copyAssetText} onDownload={downloadImage} onDelete={() => setDeletingAsset(asset)} />
                         ))}
                     </div>
 
@@ -315,7 +325,7 @@ export default function AssetsPage() {
                         </Form.Item>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <Form.Item name="source" label="来源">
-                                <Input placeholder="手动添加 / 画布 / 提示词库" />
+                                <Input placeholder="手动添加 / 画布" />
                             </Form.Item>
                             <Form.Item name="note" label="备注">
                                 <Input placeholder="可选" />
@@ -393,7 +403,8 @@ export default function AssetsPage() {
                 />
             </Modal>
 
-            <AssetDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} onCopy={copyAssetText} onDownload={downloadImage} />
+            <AssetDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} onRename={(asset) => setRenamingAsset(asset)} onCopy={copyAssetText} onDownload={downloadImage} />
+            <RenameAssetModal asset={renamingAsset} onClose={() => setRenamingAsset(null)} onRename={renameAsset} />
 
             <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
 
@@ -404,7 +415,7 @@ export default function AssetsPage() {
     );
 }
 
-function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { asset: Asset; onOpen: () => void; onEdit: () => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void; onDelete: () => void }) {
+function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDelete }: { asset: Asset; onOpen: () => void; onEdit: () => void; onRename: () => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void; onDelete: () => void }) {
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const summary = assetSummary(asset);
     return (
@@ -450,6 +461,9 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                 <Button size="small" onClick={onOpen}>
                     查看
                 </Button>
+                <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onRename}>
+                    重命名
+                </Button>
                 {asset.kind !== "video" ? (
                     <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>
                         编辑
@@ -473,7 +487,7 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
     );
 }
 
-function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | null; onClose: () => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void }) {
+function AssetDrawer({ asset, onClose, onRename, onCopy, onDownload }: { asset: Asset | null; onClose: () => void; onRename: (asset: Asset) => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
     return (
         <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
@@ -515,7 +529,18 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
                             <Typography.Paragraph className="mt-1">{asset.note}</Typography.Paragraph>
                         </div>
                     ) : null}
+                    {getAssetPrompt(asset) ? (
+                        <div className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
+                            <Typography.Text type="secondary" className="block text-xs">
+                                完整提示词
+                            </Typography.Text>
+                            <Typography.Paragraph className="!mb-0 !mt-2 max-h-60 overflow-auto whitespace-pre-wrap text-sm leading-6">{getAssetPrompt(asset)}</Typography.Paragraph>
+                        </div>
+                    ) : null}
                     <Space>
+                        <Button icon={<PencilLine className="size-4" />} onClick={() => onRename(asset)}>
+                            重命名
+                        </Button>
                         {asset.kind === "text" ? (
                             <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>
                                 复制文本
@@ -533,11 +558,56 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Asset | nu
     );
 }
 
+function RenameAssetModal({ asset, onClose, onRename }: { asset: Asset | null; onClose: () => void; onRename: (asset: Asset, title: string) => void }) {
+    const [title, setTitle] = useState("");
+
+    useEffect(() => {
+        setTitle(asset?.title || "");
+    }, [asset]);
+
+    const nextTitle = title.trim();
+    return (
+        <Modal
+            title="重命名素材"
+            open={Boolean(asset)}
+            onCancel={onClose}
+            onOk={() => {
+                if (asset) onRename(asset, title);
+            }}
+            okText="保存"
+            cancelText="取消"
+            okButtonProps={{ disabled: !nextTitle || nextTitle === asset?.title }}
+            destroyOnHidden
+        >
+            <Input
+                autoFocus
+                value={title}
+                placeholder="输入新的素材名称"
+                maxLength={80}
+                showCount
+                onChange={(event) => setTitle(event.target.value)}
+                onPressEnter={() => {
+                    if (asset && nextTitle && nextTitle !== asset.title) onRename(asset, title);
+                }}
+            />
+        </Modal>
+    );
+}
+
 function assetSummary(asset: Asset) {
     if (asset.kind === "text") return asset.data.content;
     return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
 }
 
 function assetSearchText(asset: Asset) {
-    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), getAssetPrompt(asset), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+}
+
+function getAssetPrompt(asset: Asset) {
+    const metadata = asset.metadata || {};
+    return stringValue(metadata.prompt) || stringValue(metadata.fullPrompt) || stringValue(metadata.composerContent) || stringValue(metadata.generationPrompt);
+}
+
+function stringValue(value: unknown) {
+    return typeof value === "string" ? value.trim() : "";
 }

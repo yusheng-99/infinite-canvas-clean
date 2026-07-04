@@ -41,7 +41,7 @@ export default function HomePage() {
             <span className="block text-zinc-500 dark:text-zinc-400">文档中心</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 dark:text-zinc-400">
-            面向图片创作的无限画布，把画布编排、AI 生成、参考图编辑、提示词库和素材沉淀放在同一个工作流里。
+            面向图片创作的无限画布，把画布编排、AI 生成、参考图编辑和素材沉淀放在同一个工作流里。
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
