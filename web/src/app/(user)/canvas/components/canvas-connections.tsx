@@ -1,24 +1,28 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import React, { type MouseEvent as ReactMouseEvent } from "react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "../types";
 
-export function ConnectionPath({
-    connection,
-    from,
-    to,
-    active,
-    onSelect,
-    onContextMenu,
-}: {
+type ConnectionPathProps = {
     connection: CanvasConnection;
     from: CanvasNodeData;
     to: CanvasNodeData;
     active: boolean;
+    lightweight?: boolean;
     onSelect: () => void;
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
-}) {
+};
+
+export const ConnectionPath = React.memo(function ConnectionPath({
+    connection,
+    from,
+    to,
+    active,
+    lightweight = false,
+    onSelect,
+    onContextMenu,
+}: ConnectionPathProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const startX = from.position.x + from.width;
     const startY = from.position.y + from.height / 2;
@@ -30,33 +34,39 @@ export function ConnectionPath({
 
     return (
         <g>
-            <path
-                data-connection-id={connection.id}
-                d={pathD}
-                stroke="transparent"
-                strokeWidth="16"
-                fill="none"
-                style={{ cursor: "pointer", pointerEvents: "stroke" }}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onSelect();
-                }}
-                onContextMenu={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onContextMenu?.(event);
-                }}
-            />
+            {!lightweight ? (
+                <path
+                    data-connection-id={connection.id}
+                    d={pathD}
+                    stroke="transparent"
+                    strokeWidth="16"
+                    fill="none"
+                    style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onSelect();
+                    }}
+                    onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onContextMenu?.(event);
+                    }}
+                />
+            ) : null}
             <path
                 d={pathD}
                 stroke={active ? theme.node.activeStroke : theme.node.muted}
-                strokeWidth={active ? 3 : 2}
-                strokeOpacity={active ? 1 : 0.82}
+                strokeWidth={lightweight ? 1.5 : active ? 3 : 2}
+                strokeOpacity={lightweight ? 0.48 : active ? 1 : 0.82}
                 fill="none"
-                style={{ filter: active ? `drop-shadow(0 0 8px ${theme.node.activeStroke}66)` : undefined, pointerEvents: "none" }}
+                style={{ filter: active && !lightweight ? `drop-shadow(0 0 8px ${theme.node.activeStroke}66)` : undefined, pointerEvents: "none" }}
             />
         </g>
     );
+}, areConnectionPathPropsEqual);
+
+function areConnectionPathPropsEqual(prev: ConnectionPathProps, next: ConnectionPathProps) {
+    return prev.connection === next.connection && prev.from === next.from && prev.to === next.to && prev.active === next.active && prev.lightweight === next.lightweight;
 }
 
 export function ActiveConnectionPath({ node, handle, mouseWorld, target }: { node?: CanvasNodeData; handle: ConnectionHandle; mouseWorld: Position; target?: CanvasNodeData }) {

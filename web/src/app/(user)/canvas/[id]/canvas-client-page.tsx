@@ -346,6 +346,8 @@ function InfiniteCanvasPage() {
     const didInitialCenterRef = useRef(false);
     const rafRef = useRef<number | null>(null);
     const toolbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const viewportInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const viewportInteractingRef = useRef(false);
     const nodeDraggingRef = useRef(false);
     const dragRef = useRef<{
         isDraggingNode: boolean;
@@ -382,6 +384,7 @@ function InfiniteCanvasPage() {
     const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
     const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+    const [isViewportInteracting, setIsViewportInteracting] = useState(false);
     const [connectingParams, setConnectingParams] = useState<ConnectionHandle | null>(null);
     const [connectionTargetNodeId, setConnectionTargetNodeId] = useState<string | null>(null);
     const [pendingConnectionCreate, setPendingConnectionCreate] = useState<PendingConnectionCreate | null>(null);
@@ -689,6 +692,29 @@ function InfiniteCanvasPage() {
         }, 120);
     }, []);
 
+    const markViewportInteracting = useCallback(() => {
+        if (!viewportInteractingRef.current) {
+            viewportInteractingRef.current = true;
+            setIsViewportInteracting(true);
+            setHoveredNodeId(null);
+            setToolbarNodeId(null);
+        }
+        if (viewportInteractionTimerRef.current) clearTimeout(viewportInteractionTimerRef.current);
+        viewportInteractionTimerRef.current = setTimeout(() => {
+            viewportInteractingRef.current = false;
+            setIsViewportInteracting(false);
+            viewportInteractionTimerRef.current = null;
+        }, 140);
+    }, []);
+
+    useEffect(
+        () => () => {
+            if (viewportInteractionTimerRef.current) clearTimeout(viewportInteractionTimerRef.current);
+            viewportInteractingRef.current = false;
+        },
+        [],
+    );
+
     const connectNodes = useCallback(
         (current: ConnectionHandle, targetNodeId: string) => {
             if (current.nodeId === targetNodeId) return;
@@ -825,20 +851,50 @@ function InfiniteCanvasPage() {
         [screenToCanvas],
     );
 
-    const visibleNodes = useMemo(() => {
+    const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+    const viewportBounds = useMemo(() => {
         const padding = 280;
         const rect = containerRef.current?.getBoundingClientRect();
         const width = rect?.width || size.width;
         const height = rect?.height || size.height;
         const viewLeft = -viewport.x / viewport.k - padding;
         const viewTop = -viewport.y / viewport.k - padding;
-        const viewRight = viewLeft + width / viewport.k + padding * 2;
-        const viewBottom = viewTop + height / viewport.k + padding * 2;
+        return {
+            left: viewLeft,
+            top: viewTop,
+            right: viewLeft + width / viewport.k + padding * 2,
+            bottom: viewTop + height / viewport.k + padding * 2,
+        };
+    }, [size.height, size.width, viewport.k, viewport.x, viewport.y]);
 
-        return nodes.filter((node) => !isHiddenBatchChild(node, nodes, collapsingBatchIds) && node.position.x + node.width > viewLeft && node.position.x < viewRight && node.position.y + node.height > viewTop && node.position.y < viewBottom);
-    }, [collapsingBatchIds, nodes, size.height, size.width, viewport.k, viewport.x, viewport.y]);
+    const hiddenBatchNodeIds = useMemo(() => {
+        const hidden = new Set<string>();
+        nodes.forEach((node) => {
+            const rootId = node.metadata?.batchRootId;
+            if (!rootId || collapsingBatchIds.has(rootId)) return;
+            const root = nodeById.get(rootId);
+            if (root && !root.metadata?.imageBatchExpanded) hidden.add(node.id);
+        });
+        nodes.forEach((node) => {
+            if (!node.metadata?.isBatchRoot || node.metadata?.imageBatchExpanded || collapsingBatchIds.has(node.id)) return;
+            node.metadata.batchChildIds?.forEach((id) => hidden.add(id));
+        });
+        return hidden;
+    }, [collapsingBatchIds, nodeById, nodes]);
 
-    const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+    const visibleNodes = useMemo(
+        () =>
+            nodes.filter(
+                (node) =>
+                    !hiddenBatchNodeIds.has(node.id) &&
+                    node.position.x + node.width > viewportBounds.left &&
+                    node.position.x < viewportBounds.right &&
+                    node.position.y + node.height > viewportBounds.top &&
+                    node.position.y < viewportBounds.bottom,
+            ),
+        [hiddenBatchNodeIds, nodes, viewportBounds],
+    );
+    const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
     const toolbarNode = toolbarNodeId ? nodeById.get(toolbarNodeId) || null : null;
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
@@ -886,6 +942,16 @@ function InfiniteCanvasPage() {
 
         return { nodeIds, connectionIds };
     }, [activeNodeId, connections]);
+
+    const visibleConnections = useMemo(
+        () =>
+            connections.filter((connection) => {
+                const from = nodeById.get(connection.fromNodeId);
+                const to = nodeById.get(connection.toNodeId);
+                return Boolean(from && to && !hiddenBatchNodeIds.has(from.id) && !hiddenBatchNodeIds.has(to.id) && (visibleNodeIds.has(from.id) || visibleNodeIds.has(to.id)));
+            }),
+        [connections, hiddenBatchNodeIds, nodeById, visibleNodeIds],
+    );
 
     const configInputsById = useMemo(() => {
         const map = new Map<string, NodeGenerationInput[]>();
@@ -1096,12 +1162,14 @@ function InfiniteCanvasPage() {
     }, [getCanvasCenter]);
 
     const resetViewport = useCallback(() => {
+        markViewportInteracting();
         setViewport({ x: size.width / 2, y: size.height / 2, k: 1 });
         setContextMenu(null);
-    }, [size.height, size.width]);
+    }, [markViewportInteracting, size.height, size.width]);
 
     const setZoomScale = useCallback(
         (scale: number) => {
+            markViewportInteracting();
             const nextScale = Math.min(Math.max(scale, 0.05), 5);
             setViewport((prev) => ({
                 x: size.width / 2 - ((size.width / 2 - prev.x) / prev.k) * nextScale,
@@ -1110,7 +1178,16 @@ function InfiniteCanvasPage() {
             }));
             setContextMenu(null);
         },
-        [size.height, size.width],
+        [markViewportInteracting, size.height, size.width],
+    );
+
+    const handleViewportChange = useCallback(
+        (next: ViewportTransform) => {
+            markViewportInteracting();
+            setViewport(next);
+            setContextMenu(null);
+        },
+        [markViewportInteracting],
     );
 
     const applyHistory = useCallback((entry: CanvasHistoryEntry) => {
@@ -2764,23 +2841,14 @@ function InfiniteCanvasPage() {
                     containerRef={containerRef}
                     viewport={viewport}
                     backgroundMode={backgroundMode}
-                    onViewportChange={(next) => {
-                        setViewport(next);
-                        setContextMenu(null);
-                    }}
+                    onViewportChange={handleViewportChange}
                     onCanvasMouseDown={handleCanvasMouseDown}
                     onCanvasDeselect={deselectCanvas}
                     onContextMenu={preventCanvasContextMenu}
                     onDrop={handleDrop}
                 >
                     <svg className="absolute left-0 top-0 h-[10000px] w-[10000px] overflow-visible" style={{ pointerEvents: "none", transform: "translateZ(0)", zIndex: 0 }}>
-                        {connections
-                            .filter((connection) => {
-                                const from = nodeById.get(connection.fromNodeId);
-                                const to = nodeById.get(connection.toNodeId);
-                                return Boolean(from && to && !isHiddenBatchConnectionEndpoint(from, nodes) && !isHiddenBatchConnectionEndpoint(to, nodes));
-                            })
-                            .map((connection) => {
+                        {visibleConnections.map((connection) => {
                                 const from = nodeById.get(connection.fromNodeId);
                                 const to = nodeById.get(connection.toNodeId);
                                 if (!from || !to) return null;
@@ -2792,6 +2860,7 @@ function InfiniteCanvasPage() {
                                         from={from}
                                         to={to}
                                         active={selectedConnectionId === connection.id || relatedHighlight.connectionIds.has(connection.id)}
+                                        lightweight={isViewportInteracting}
                                         onSelect={() => {
                                             setSelectedConnectionId(connection.id);
                                             setSelectedNodeIds(new Set());
@@ -2818,8 +2887,9 @@ function InfiniteCanvasPage() {
                             isFocusRelated={activeNodeId === node.id}
                             isConnectionTarget={connectionTargetNodeId === node.id}
                             isConnecting={Boolean(connectingParams)}
+                            isViewportInteracting={isViewportInteracting}
                             editRequestNonce={editingNodeId === node.id ? editRequestNonce : 0}
-                            showPanel={dialogNodeId === node.id && !selectionBox}
+                            showPanel={dialogNodeId === node.id && !selectionBox && !isViewportInteracting}
                             batchCount={batchChildCountById.get(node.id) || 0}
                             batchExpanded={Boolean(node.metadata?.imageBatchExpanded)}
                             batchClosing={Boolean(node.metadata?.batchRootId && collapsingBatchIds.has(node.metadata.batchRootId))}
@@ -2918,7 +2988,7 @@ function InfiniteCanvasPage() {
                 </InfiniteCanvas>
 
                 <CanvasNodeHoverToolbar
-                    node={isNodeDragging || nodeImageSettingsOpen ? null : toolbarNode}
+                    node={isNodeDragging || nodeImageSettingsOpen || isViewportInteracting ? null : toolbarNode}
                     viewport={viewport}
                     onKeep={keepNodeToolbar}
                     onLeave={hideNodeToolbar}
@@ -2968,7 +3038,14 @@ function InfiniteCanvasPage() {
                     }}
                 />
 
-                {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}
+                {isMiniMapOpen ? (
+                    <Minimap
+                        nodes={nodes}
+                        viewport={viewport}
+                        viewportSize={size}
+                        onViewportChange={handleViewportChange}
+                    />
+                ) : null}
 
                 <CanvasZoomControls scale={viewport.k} onScaleChange={setZoomScale} onReset={resetViewport} isMiniMapOpen={isMiniMapOpen} onToggleMiniMap={() => setIsMiniMapOpen((value) => !value)} />
 
@@ -3435,11 +3512,6 @@ function isHiddenBatchChild(node: CanvasNodeData, nodes: CanvasNodeData[], colla
     if (!root) return false;
     const rootId = root.id;
     if (root && collapsingBatchIds?.has(rootId)) return false;
-    return Boolean(root && !root.metadata?.imageBatchExpanded);
-}
-
-function isHiddenBatchConnectionEndpoint(node: CanvasNodeData, nodes: CanvasNodeData[]) {
-    const root = findBatchRootForChild(node, nodes);
     return Boolean(root && !root.metadata?.imageBatchExpanded);
 }
 

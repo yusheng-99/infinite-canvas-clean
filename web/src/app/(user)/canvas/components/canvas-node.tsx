@@ -22,6 +22,7 @@ type CanvasNodeProps = {
     isFocusRelated: boolean;
     isConnectionTarget: boolean;
     isConnecting: boolean;
+    isViewportInteracting?: boolean;
     editRequestNonce?: number;
     showPanel: boolean;
     showImageInfo: boolean;
@@ -60,6 +61,7 @@ type NodeContentRendererProps = {
     batchExpanded: boolean;
     batchOpening: boolean;
     batchRecovering: boolean;
+    isViewportInteracting: boolean;
     renderNodeContent?: (node: CanvasNodeData) => ReactNode;
     onContentChange: (nodeId: string, content: string) => void;
     onStopEditing: () => void;
@@ -79,6 +81,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     isFocusRelated,
     isConnectionTarget,
     isConnecting,
+    isViewportInteracting = false,
     editRequestNonce = 0,
     showPanel,
     showImageInfo,
@@ -150,6 +153,10 @@ export const CanvasNode = React.memo(function CanvasNode({
         if (!editRequestNonce || data.type !== CanvasNodeType.Text) return;
         setIsEditingContent(true);
     }, [data.type, editRequestNonce]);
+
+    useEffect(() => {
+        if (isViewportInteracting) setHovered(false);
+    }, [isViewportInteracting]);
 
     useEffect(() => {
         if (!isEditingContent) return;
@@ -251,11 +258,13 @@ export const CanvasNode = React.memo(function CanvasNode({
                 contain: "layout style",
             }}
             onMouseEnter={() => {
+                if (isViewportInteracting) return;
                 setHovered(true);
                 onHoverStart(data.id);
             }}
             onMouseLeave={() => {
                 setHovered(false);
+                if (isViewportInteracting) return;
                 onHoverEnd(data.id);
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
@@ -265,7 +274,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
                     borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
-                    boxShadow: isActive ? `0 0 0 1px ${selectionBlue}55` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
+                    boxShadow: isViewportInteracting ? undefined : isActive ? `0 0 0 1px ${selectionBlue}55` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
@@ -300,6 +309,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     <NodeContent
                         node={data}
                         theme={theme}
+                        isViewportInteracting={isViewportInteracting}
                         isEditingContent={isEditingContent}
                         textareaRef={textareaRef}
                         isBatchRoot={isBatchRoot}
@@ -319,10 +329,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                     />
                 </div>
 
-                {showImageInfo && hasImageContent ? <ImageInfoBar node={data} /> : null}
-                {resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} /> : null}
+                {showImageInfo && hasImageContent && !isViewportInteracting ? <ImageInfoBar node={data} /> : null}
+                {resourceLabel && data.type !== CanvasNodeType.Image && !isViewportInteracting ? <ResourceLabelBadge reference={resourceLabel} /> : null}
 
-                {!hasImageContent && !hasVideoContent && !hasAudioContent ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
+                {!hasImageContent && !hasVideoContent && !hasAudioContent && !isViewportInteracting ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12" style={{ background: `linear-gradient(to top, ${theme.canvas.background}66, transparent)` }} /> : null}
 
                 <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
                 <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
@@ -330,13 +340,40 @@ export const CanvasNode = React.memo(function CanvasNode({
                 <ResizeHandle corner="bottom-right" onMouseDown={handleResizeMouseDown} />
             </div>
 
-            <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
-            <ConnectionHandleDot side="right" visible={data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
+            <ConnectionHandleDot side="left" visible={!isViewportInteracting && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "target")} />
+            <ConnectionHandleDot side="right" visible={!isViewportInteracting && data.type !== CanvasNodeType.Config && (hovered || isSelected || isConnecting)} onMouseDown={(event) => onConnectStart(event, data.id, "source")} />
 
             {showPanel && renderPanel ? <div className="absolute left-1/2 top-full z-[70] w-[500px] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
         </div>
     );
-});
+}, areCanvasNodePropsEqual);
+
+function areCanvasNodePropsEqual(prev: CanvasNodeProps, next: CanvasNodeProps) {
+    const needsFreshScale = prev.isSelected || next.isSelected || prev.isFocusRelated || next.isFocusRelated;
+    return (
+        prev.data === next.data &&
+        (!needsFreshScale || prev.scale === next.scale) &&
+        prev.isSelected === next.isSelected &&
+        prev.isRelated === next.isRelated &&
+        prev.isFocusRelated === next.isFocusRelated &&
+        prev.isConnectionTarget === next.isConnectionTarget &&
+        prev.isConnecting === next.isConnecting &&
+        prev.isViewportInteracting === next.isViewportInteracting &&
+        prev.editRequestNonce === next.editRequestNonce &&
+        prev.showPanel === next.showPanel &&
+        prev.showImageInfo === next.showImageInfo &&
+        prev.resourceLabel === next.resourceLabel &&
+        prev.mentionReferences === next.mentionReferences &&
+        prev.batchCount === next.batchCount &&
+        prev.batchExpanded === next.batchExpanded &&
+        prev.batchClosing === next.batchClosing &&
+        prev.batchOpening === next.batchOpening &&
+        prev.batchRecovering === next.batchRecovering &&
+        prev.batchMotion === next.batchMotion &&
+        (!(prev.showPanel || next.showPanel) || prev.renderPanel === next.renderPanel) &&
+        (next.isViewportInteracting || next.data.type !== CanvasNodeType.Config || prev.renderNodeContent === next.renderNodeContent)
+    );
+}
 
 function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
@@ -397,28 +434,30 @@ function UnknownNodeContent({ theme }: Pick<NodeContentRendererProps, "theme">) 
     );
 }
 
-function TextContent({ node, theme, isEditingContent, textareaRef, mentionReferences, onContentChange, onStopEditing, onGenerateImage }: NodeContentRendererProps) {
+function TextContent({ node, theme, isViewportInteracting, isEditingContent, textareaRef, mentionReferences, onContentChange, onStopEditing, onGenerateImage }: NodeContentRendererProps) {
     const fontSize = node.metadata?.fontSize || 14;
     const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.65)}px`, color: theme.node.text, boxSizing: "border-box" } as React.CSSProperties;
 
     return (
         <div className="flex h-full w-full flex-col overflow-hidden pt-8">
-            <button
-                type="button"
-                className="absolute right-3 top-3 z-20 inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-medium opacity-85 backdrop-blur-md transition hover:scale-[1.02] hover:opacity-100"
-                style={{ background: `${theme.toolbar.panel}dd`, borderColor: theme.node.stroke, color: theme.node.text }}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onGenerateImage?.(node);
-                }}
-                onMouseDown={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-                title="用文本生图"
-                aria-label="用文本生图"
-            >
-                <ImageIcon className="size-3.5" />
-                生图
-            </button>
+            {!isViewportInteracting ? (
+                <button
+                    type="button"
+                    className="absolute right-3 top-3 z-20 inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-medium opacity-85 backdrop-blur-md transition hover:scale-[1.02] hover:opacity-100"
+                    style={{ background: `${theme.toolbar.panel}dd`, borderColor: theme.node.stroke, color: theme.node.text }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onGenerateImage?.(node);
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    title="用文本生图"
+                    aria-label="用文本生图"
+                >
+                    <ImageIcon className="size-3.5" />
+                    生图
+                </button>
+            ) : null}
             {isEditingContent ? (
                 <CanvasResourceMentionTextarea
                     ref={textareaRef}
@@ -468,7 +507,7 @@ function ImageNodeContent(props: NodeContentRendererProps) {
                 <EmptyImageContent {...props} isBatchRoot={false} />
             );
         return (
-            <BatchFrame batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} onToggleBatch={props.onToggleBatch}>
+            <BatchFrame batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} isViewportInteracting={props.isViewportInteracting} onToggleBatch={props.onToggleBatch}>
                 {content}
             </BatchFrame>
         );
@@ -487,11 +526,12 @@ function ImageNodeContent(props: NodeContentRendererProps) {
             onSetBatchPrimary={props.onSetBatchPrimary}
             onRegenerate={props.onRetry}
             onStopGeneration={props.onStopGeneration}
+            isViewportInteracting={props.isViewportInteracting}
         />
     );
 }
 
-function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch }: NodeContentRendererProps) {
+function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, isViewportInteracting, onToggleBatch }: NodeContentRendererProps) {
     const content = (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
             <div className="flex size-14 items-center justify-center rounded-2xl" style={{ background: theme.toolbar.activeBg }}>
@@ -502,7 +542,7 @@ function EmptyImageContent({ theme, isBatchRoot, batchCount, batchExpanded, batc
     );
     if (isBatchRoot)
         return (
-            <BatchFrame batchCount={batchCount} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} onToggleBatch={onToggleBatch}>
+            <BatchFrame batchCount={batchCount} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} isViewportInteracting={isViewportInteracting} onToggleBatch={onToggleBatch}>
                 {content}
             </BatchFrame>
         );
@@ -550,6 +590,7 @@ function ImageContent({
     onSetBatchPrimary,
     onRegenerate,
     onStopGeneration,
+    isViewportInteracting,
 }: {
     node: CanvasNodeData;
     isBatchRoot: boolean;
@@ -561,6 +602,7 @@ function ImageContent({
     onSetBatchPrimary?: () => void;
     onRegenerate?: (node: CanvasNodeData) => void;
     onStopGeneration?: (node: CanvasNodeData) => void;
+    isViewportInteracting: boolean;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const isBatchChild = Boolean(node.metadata?.batchRootId);
@@ -568,13 +610,15 @@ function ImageContent({
     const imageSrc = String(node.metadata?.content || "").trim();
 
     return (
-        <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} onToggleBatch={onToggleBatch}>
+        <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} isViewportInteracting={isViewportInteracting} onToggleBatch={onToggleBatch}>
             <div className="h-full w-full overflow-hidden rounded-3xl">
                 {imageSrc ? (
                     <img
                         src={imageSrc}
                         alt={node.title}
                         draggable={false}
+                        loading="lazy"
+                        decoding="async"
                         onDragStart={(event) => event.preventDefault()}
                         className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
                     />
@@ -585,7 +629,7 @@ function ImageContent({
                     </div>
                 )}
             </div>
-            {canRegenerate ? (
+            {canRegenerate && !isViewportInteracting ? (
                 <button
                     type="button"
                     className="absolute left-3 top-3 z-30 flex size-9 items-center justify-center rounded-full border shadow-[0_8px_20px_rgba(15,23,42,.16)] backdrop-blur-md transition hover:scale-[1.04]"
@@ -602,7 +646,7 @@ function ImageContent({
                     <RefreshCw className="size-4" />
                 </button>
             ) : null}
-            {isBatchRoot ? (
+            {isBatchRoot && !isViewportInteracting ? (
                 <button
                     type="button"
                     className="absolute right-2.5 top-2.5 z-30 flex h-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold shadow-[0_6px_18px_rgba(15,23,42,.10)] backdrop-blur-md transition hover:scale-[1.02]"
@@ -619,7 +663,7 @@ function ImageContent({
                     <ChevronRight className={`size-3.5 opacity-55 transition-transform ${batchExpanded ? "rotate-90" : ""}`} />
                 </button>
             ) : null}
-            {isBatchChild ? (
+            {isBatchChild && !isViewportInteracting ? (
                 <button
                     type="button"
                     className="absolute right-3 top-3 z-30 flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium opacity-0 shadow-[0_8px_20px_rgba(68,64,60,.13)] backdrop-blur-md transition group-hover/batch:opacity-100 hover:scale-[1.02]"
@@ -693,7 +737,7 @@ function GenerationPauseButton({ node, theme, onStopGeneration }: Pick<NodeConte
     );
 }
 
-function BatchFrame({ batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch, children }: { batchCount: number; batchExpanded: boolean; batchOpening: boolean; batchRecovering: boolean; onToggleBatch?: () => void; children: ReactNode }) {
+function BatchFrame({ batchCount, batchExpanded, batchOpening, batchRecovering, isViewportInteracting, onToggleBatch, children }: { batchCount: number; batchExpanded: boolean; batchOpening: boolean; batchRecovering: boolean; isViewportInteracting: boolean; onToggleBatch?: () => void; children: ReactNode }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const isBatchRoot = batchCount > 1;
     return (
@@ -708,7 +752,7 @@ function BatchFrame({ batchCount, batchExpanded, batchOpening, batchRecovering, 
                     : undefined
             }
         >
-            {isBatchRoot ? (
+            {isBatchRoot && !isViewportInteracting ? (
                 <div className="pointer-events-none absolute inset-0 overflow-visible">
                     {Array.from({ length: Math.min(batchCount - 1, 5) }).map((_, index) => (
                         <div
