@@ -48,6 +48,7 @@ export type AiConfig = {
     imageRetryCount: string;
     imageSuccessSoundEnabled: string;
     imageSuccessSoundUrl: string;
+    imageSuccessSounds: { id: string; name: string; url: string }[];
 };
 
 export type WebdavSyncConfig = {
@@ -106,6 +107,7 @@ export const defaultConfig: AiConfig = {
     imageRetryCount: "",
     imageSuccessSoundEnabled: "true",
     imageSuccessSoundUrl: "",
+    imageSuccessSounds: [],
 };
 
 export const defaultWebdavSyncConfig: WebdavSyncConfig = {
@@ -263,6 +265,7 @@ export function normalizeAiConfig(source: Partial<AiConfig> = {}): AiConfig {
         imageRetryCount: config.imageRetryCount ?? "",
         imageSuccessSoundEnabled: config.imageSuccessSoundEnabled ?? "true",
         imageSuccessSoundUrl: config.imageSuccessSoundUrl || "",
+        imageSuccessSounds: Array.isArray(config.imageSuccessSounds) ? config.imageSuccessSounds.filter((item) => item?.id && item?.name && item?.url) : [],
         imageModels: Array.isArray(source.imageModels) ? normalizeModelList(config.imageModels, channels) : filterModelsByCapability(models, "image"),
         videoModels: Array.isArray(source.videoModels) ? normalizeModelList(config.videoModels, channels) : filterModelsByCapability(models, "video"),
         textModels: Array.isArray(source.textModels) ? normalizeModelList(config.textModels, channels) : filterModelsByCapability(models, "text"),

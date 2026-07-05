@@ -1,7 +1,7 @@
 "use client";
 
 import { App, Button, Form, Input, Modal, Progress, Segmented, Select, Tabs } from "antd";
-import { CircleAlert, Cloud, Plus, RefreshCw, Trash2, Upload, Wifi } from "lucide-react";
+import { CircleAlert, Cloud, Play, Plus, RefreshCw, Trash2, Upload, Wifi } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -9,6 +9,7 @@ import { fetchChannelModels } from "@/services/api/image";
 import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
 import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
+import { playImageSuccessSound } from "@/lib/image-success-sound";
 import { createModelChannel, defaultBaseUrlForApiFormat, filterModelsByCapability, modelOptionLabel, modelOptionsFromChannels, normalizeModelOptionValue, useConfigStore, type AiConfig, type ApiCallFormat, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 
 type ModelGroup = {
@@ -77,6 +78,11 @@ export function AppConfigModal() {
     const clearPromptContinue = useConfigStore((state) => state.clearPromptContinue);
     const modelOptions = config.models.map((model) => ({ label: modelOptionLabel(config, model), value: model }));
     const webdavReady = Boolean(webdav.url.trim());
+    const successSoundOptions = [
+        { label: "内置提示音", value: "" },
+        ...config.imageSuccessSounds.map((item) => ({ label: item.name, value: item.url })),
+        ...(config.imageSuccessSoundUrl && !config.imageSuccessSounds.some((item) => item.url === config.imageSuccessSoundUrl) ? [{ label: "当前自定义音效", value: config.imageSuccessSoundUrl }] : []),
+    ];
 
     const saveConfig = (nextConfig: AiConfig) => {
         updateConfigPatch(nextConfig);
@@ -166,8 +172,12 @@ export function AppConfigModal() {
         }
         const reader = new FileReader();
         reader.onload = () => {
-            updateConfig("imageSuccessSoundUrl", String(reader.result || ""));
-            updateConfig("imageSuccessSoundEnabled", "true");
+            const url = String(reader.result || "");
+            updateConfigPatch({
+                imageSuccessSoundUrl: url,
+                imageSuccessSoundEnabled: "true",
+                imageSuccessSounds: [{ id: `${Date.now()}`, name: file.name.replace(/\.[^.]+$/, "") || "自定义音效", url }, ...config.imageSuccessSounds].slice(0, 12),
+            });
             message.success("成功音效已更新");
         };
         reader.onerror = () => message.error("读取音效失败");
@@ -392,7 +402,7 @@ export function AppConfigModal() {
                                         />
                                     </Form.Item>
                                     <Form.Item label="生图成功音效" extra="成功时播放；失败不播放。留空使用内置提示音。" className="mb-4 md:col-span-4">
-                                        <div className="grid gap-2 md:grid-cols-[180px_1fr_auto_auto]">
+                                        <div className="grid gap-2 md:grid-cols-[180px_1fr_auto_auto_auto]">
                                             <Segmented
                                                 block
                                                 value={config.imageSuccessSoundEnabled}
@@ -402,11 +412,10 @@ export function AppConfigModal() {
                                                     { label: "关闭", value: "false" },
                                                 ]}
                                             />
-                                            <Input
-                                                value={config.imageSuccessSoundUrl.startsWith("data:") ? "" : config.imageSuccessSoundUrl}
-                                                placeholder={config.imageSuccessSoundUrl.startsWith("data:") ? "已上传自定义音效" : "音效 URL，留空使用内置"}
-                                                onChange={(event) => updateConfig("imageSuccessSoundUrl", event.target.value)}
-                                            />
+                                            <Select value={config.imageSuccessSoundUrl} options={successSoundOptions} onChange={(value) => updateConfig("imageSuccessSoundUrl", value)} />
+                                            <Button icon={<Play className="size-4" />} onClick={() => playImageSuccessSound({ imageSuccessSoundEnabled: "true", imageSuccessSoundUrl: config.imageSuccessSoundUrl })}>
+                                                试听
+                                            </Button>
                                             <Button icon={<Upload className="size-4" />} onClick={() => successSoundInputRef.current?.click()}>
                                                 上传
                                             </Button>

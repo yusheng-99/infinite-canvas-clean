@@ -5,13 +5,25 @@ import { useEffect, useRef } from "react";
 import { App } from "antd";
 
 import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
+import { useAssetStore } from "@/stores/use-asset-store";
+import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
+    const cleanedFiles = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const config = useConfigStore((state) => state.config);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
+    const assetHydrated = useAssetStore((state) => state.hydrated);
+    const canvasHydrated = useCanvasStore((state) => state.hydrated);
+    const cleanupImages = useAssetStore((state) => state.cleanupImages);
+
+    useEffect(() => {
+        if (cleanedFiles.current || !assetHydrated || !canvasHydrated) return;
+        cleanedFiles.current = true;
+        cleanupImages();
+    }, [assetHydrated, canvasHydrated, cleanupImages]);
 
     useEffect(() => {
         if (handledConfigParams.current) return;
