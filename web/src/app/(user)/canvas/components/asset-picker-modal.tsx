@@ -43,7 +43,7 @@ function PickerCard({ asset, onOpen, onInsert, onRename, onDelete }: { asset: As
         <div
             role="button"
             tabIndex={0}
-            className="group relative cursor-pointer overflow-hidden rounded-lg border border-stone-200 bg-white text-left transition hover:border-stone-400 hover:shadow-md dark:border-stone-700 dark:bg-stone-900 dark:hover:border-stone-500"
+            className="group relative flex h-60 cursor-pointer flex-col overflow-hidden rounded-lg border border-stone-200 bg-white text-left transition hover:border-stone-400 hover:shadow-md dark:border-stone-700 dark:bg-stone-900 dark:hover:border-stone-500"
             onClick={onOpen}
             onKeyDown={(event) => {
                 if (event.key !== "Enter" && event.key !== " ") return;
@@ -52,11 +52,11 @@ function PickerCard({ asset, onOpen, onInsert, onRename, onDelete }: { asset: As
             }}
         >
             {cover ? (
-                <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" />
+                <img src={cover} alt={asset.title} className="h-44 w-full shrink-0 object-cover" />
             ) : (
-                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-3 text-center text-xs leading-5 text-stone-500 dark:bg-stone-800 dark:text-stone-400">{asset.kind === "text" ? asset.data.content : asset.title}</div>
+                <div className="line-clamp-7 h-44 shrink-0 overflow-hidden bg-stone-100 p-3 text-xs leading-5 text-stone-500 dark:bg-stone-800 dark:text-stone-400">{asset.kind === "text" ? asset.data.content : asset.title}</div>
             )}
-            <div className="p-2.5">
+            <div className="mt-auto p-2.5">
                 <div className="flex items-center justify-between gap-2">
                     <span className="line-clamp-1 text-xs font-medium text-stone-800 dark:text-stone-200">{asset.title}</span>
                     <Tag className="m-0 shrink-0 text-[10px]">{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>
