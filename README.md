@@ -6,15 +6,13 @@
 
 <p align="center">
   <a href="https://linux.do/"><img src="https://img.shields.io/badge/Linux.do-Community-2b6de8?style=flat-square" alt="Linux.do"></a>
-  <a href="https://render.com/deploy?repo=https://github.com/basketikun/infinite-canvas"><img src="https://img.shields.io/badge/Render-Deploy-46e3b7?style=flat-square&logo=render&logoColor=111111" alt="Deploy to Render"></a>
-  <a href="https://github.com/basketikun/infinite-canvas"><img src="https://img.shields.io/github/stars/basketikun/infinite-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
   <a href="VERSION"><img src="https://img.shields.io/badge/version-0.0.3-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
-  <a href="https://vercel.com/"><img src="https://img.shields.io/badge/Vercel-ready-000000?style=flat-square&logo=vercel" alt="Vercel ready"></a>
-  <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-16.2-000000?style=flat-square&logo=nextdotjs" alt="Next.js"></a>
+  <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-7-646cff?style=flat-square&logo=vite&logoColor=white" alt="Vite"></a>
+  <a href="https://reactrouter.com/"><img src="https://img.shields.io/badge/React_Router-7-ca4245?style=flat-square&logo=reactrouter&logoColor=white" alt="React Router"></a>
 </p>
 
-无限画布是一款面向图片创作的开源工作台。它把画布编排、AI 图片生成、参考图编辑和素材沉淀放在同一个界面里，适合用来探索视觉方案并连续迭代图片结果。
+这是基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的个人精简版。核心保留无限画布、图片/视频创作台和本地素材库，删掉了我个人用不上的平台化功能，让本地自用更轻。
 
 > [!CAUTION]
 > 项目目前处于开发阶段，不保证历史数据兼容。各种数据库结构和存储格式都可能直接调整，欢迎关注后续更新，当前更适合个人/本地部署，不建议直接公网多人共用。
@@ -24,24 +22,34 @@
 ## 核心功能
 
 - 无限画布：多画布项目、节点拖拽缩放、连线、小地图、撤销重做、导入导出。
-- AI 创作：浏览器前台直连你配置的 OpenAI 兼容接口，支持文生图、图生图、参考图编辑、文本问答、音频和视频生成；Seedance 2.0 可通过火山方舟 Agent Plan 接入。
+- AI 创作：浏览器前台直连你配置的 OpenAI 兼容接口，支持文生图、图生图、参考图编辑、文本问答、音频和视频生成。
+- 我的素材：本地管理图片、视频和文本素材，方便插回画布或工作台。
 
 如果你在为担心没有合适的生图API来发愁，可以查看该免费生图项目：[chatgpt2api](https://github.com/basketikun/chatgpt2api)
 
+## 与原项目的主要不同
+
+- 定位：个人本地自用精简版，不保留平台化入口。
+- 架构：从 Next.js 迁移到 Vite + React Router，运行时不再需要 Next 服务。
+- 部署：Docker 运行层改为 nginx 静态托管，默认端口仍是 `3000`。
+- 已移除：本地 Agent / MCP、Codex App 插件、画布右侧助手工具区、内置提示词库、应用内文档入口。
+- 首页：改为简洁入口浮窗，只保留我的画布、生图工作台、视频创作台和我的素材。
+- WebDAV：只保留浏览器前端直连；如果远端服务不支持 CORS，需要自行加反代。
+- 存储：画布、素材、生成记录和 AI API Key 主要保存在浏览器本地，不提供云账号同步。
+
 ## 技术栈
 
-- 前端：Next.js、React、TypeScript、Tailwind CSS、Ant Design、Zustand、TanStack Query。
-- 少量 Next.js Route：WebDAV 可选代理。
-- 部署：Vercel 或 Docker。
+- 前端：Vite、React、React Router、TypeScript、Tailwind CSS、Ant Design、Zustand、TanStack Query。
+- 本地存储：localforage / 浏览器本地存储。
+- 部署：Vercel 静态部署或 Docker + nginx。
 
 ## 快速开始
 
-推荐直接导入仓库到 Vercel，根目录已提供 `vercel.json`，会构建 `web/`。AI API Key、Base URL、画布、素材和生成记录默认保存在浏览器本地。
+AI API Key、Base URL、画布、素材和生成记录默认保存在浏览器本地。
 
 ```bash
-git clone git@github.com:basketikun/infinite-canvas.git
-cd infinite-canvas
-cd web
+git clone git@github.com:yusheng-99/infinite-canvas-clean.git
+cd infinite-canvas-clean/web
 bun install
 bun run dev
 ```
@@ -89,28 +97,10 @@ https://canvas.best?apiKey={key}&baseUrl={address}
   </tr>
 </table>
 
-## 赞助支持
+## 上游项目
 
-<div align="center">
-
-如果这个项目对你有帮助，欢迎通过爱发电赞助支持，你的每一份鼓励都是持续更新的动力！
-
-<br>
-
-<a href="https://ifdian.net/a/basketikun">
-  <img src="https://img.shields.io/badge/%E7%88%B1%E5%8F%91%E7%94%B5-%E8%B5%9E%E5%8A%A9%E4%BD%9C%E8%80%85-946ce6?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyMS4zNWwtMS40NS0xLjMyQzUuNCAxNS4zNiAyIDEyLjI4IDIgOC41IDIgNS40MiA0LjQyIDMgNy41IDNjMS43NCAwIDMuNDEuODEgNC41IDIuMDlDMTMuMDkgMy44MSAxNC43NiAzIDE2LjUgMyAxOS41OCAzIDIyIDUuNDIgMjIgOC41YzAgMy43OC0zLjQgNi44Ni04LjU1IDExLjU0TDEyIDIxLjM1eiIvPjwvc3ZnPg==&logoColor=white" alt="爱发电赞助" />
-</a>
-
-<br>
-<br>
-
-</div>
-
-## 社区支持
-
-学 AI，上 L 站：[LinuxDO](https://linux.do/)
-
-点击链接加入群聊【AI开源交流】：https://qm.qq.com/q/DFnKzZ807u
+- 原项目：[basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas)
+- 本仓库是个人精简分支，保留原作者信息和 AGPL-3.0 协议。
 
 ## 开源协议
 
