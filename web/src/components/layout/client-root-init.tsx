@@ -4,45 +4,14 @@ import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { App } from "antd";
 
-import { fetchServerAiConfig, saveServerAiConfigOnUnload } from "@/services/app-config-storage";
-import { createModelChannel, mergeAiConfigs, useConfigStore } from "@/stores/use-config-store";
+import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
-    const handledServerConfig = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
-    const updateConfigPatch = useConfigStore((state) => state.updateConfigPatch);
     const config = useConfigStore((state) => state.config);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
-
-    useEffect(() => {
-        if (handledServerConfig.current) return;
-        fetchServerAiConfig()
-            .then((serverConfig) => {
-                handledServerConfig.current = true;
-                if (!serverConfig) return;
-                const currentConfig = useConfigStore.getState().config;
-                const mergedConfig = mergeAiConfigs(currentConfig, serverConfig);
-                if (JSON.stringify(mergedConfig) !== JSON.stringify(currentConfig)) updateConfigPatch(mergedConfig);
-            })
-            .catch(() => {
-                handledServerConfig.current = false;
-            });
-    }, [config, updateConfigPatch]);
-
-    useEffect(() => {
-        const save = () => saveServerAiConfigOnUnload(useConfigStore.getState().config);
-        const saveWhenHidden = () => {
-            if (document.visibilityState === "hidden") save();
-        };
-        window.addEventListener("pagehide", save);
-        document.addEventListener("visibilitychange", saveWhenHidden);
-        return () => {
-            window.removeEventListener("pagehide", save);
-            document.removeEventListener("visibilitychange", saveWhenHidden);
-        };
-    }, []);
 
     useEffect(() => {
         if (handledConfigParams.current) return;

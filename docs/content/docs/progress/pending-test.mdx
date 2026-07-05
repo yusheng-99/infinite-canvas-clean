@@ -12,3 +12,4 @@ description: 当前版本已实现但仍需人工验证的变更项
 - 配置与用户偏好：每个模型渠道新增 OpenAI / Gemini 调用格式选择，默认 OpenAI，切换默认格式时同步更新默认 Base URL；渠道 Tab 增加紧凑醒目的提醒，说明模型是否可选需要到“模型”Tab 选择。
 - Gemini 调用格式：支持拉取 Gemini 模型列表，并用于文本问答、基础生图和图生图请求。
 - 音频和视频生成：选择 Gemini 调用格式时先给出不支持提示，仍需使用 OpenAI 兼容渠道。
+- 架构迁移：前端从 Next.js 切换到 Vite + React Router，移除 Next API 路由，本地配置继续保存在浏览器，Docker 运行改为 nginx 静态托管。

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
 
 import { navigationTools } from "@/constant/navigation-tools";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ export default function IndexPage() {
                     return (
                         <Link
                             key={item.slug}
-                            href={`/${item.slug}`}
+                            to={`/${item.slug}`}
                             className={cn(
                                 "group flex min-h-44 flex-col justify-between rounded-3xl border border-stone-200/80 bg-white/80 p-5 shadow-[0_18px_60px_rgba(28,25,23,.10)] backdrop-blur transition hover:-translate-y-1 hover:shadow-[0_24px_80px_rgba(28,25,23,.16)]",
                                 "dark:border-stone-800/80 dark:bg-stone-950/80 dark:shadow-[0_18px_60px_rgba(0,0,0,.35)] dark:hover:shadow-[0_24px_80px_rgba(0,0,0,.48)]",

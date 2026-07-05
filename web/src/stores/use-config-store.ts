@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
-import { saveServerAiConfig } from "@/services/app-config-storage";
 
 export type ApiCallFormat = "openai" | "gemini";
 
@@ -52,7 +51,7 @@ export type AiConfig = {
 };
 
 export type WebdavSyncConfig = {
-    proxyMode: "direct" | "nextjs";
+    proxyMode: "direct";
     url: string;
     username: string;
     password: string;
@@ -65,7 +64,6 @@ export type ModelCapability = "image" | "video" | "text" | "audio";
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
-let serverSavePromise: Promise<void> = Promise.resolve();
 
 export const defaultConfig: AiConfig = {
     channelMode: "local",
@@ -191,7 +189,6 @@ export const useConfigStore = create<ConfigStore>()(
                         ...state.config,
                         [key]: value,
                     };
-                    saveConfigToServer(config);
                     return { config };
                 }),
             updateConfigPatch: (patch) =>
@@ -200,7 +197,6 @@ export const useConfigStore = create<ConfigStore>()(
                         ...state.config,
                         ...patch,
                     };
-                    saveConfigToServer(config);
                     return { config };
                 }),
             updateWebdavConfig: (key, value) =>
@@ -224,18 +220,13 @@ export const useConfigStore = create<ConfigStore>()(
                 const persistedWebdav = (persistedState.webdav || {}) as Partial<WebdavSyncConfig>;
                 return {
                     ...current,
-                    webdav: { ...defaultWebdavSyncConfig, ...persistedWebdav },
+                    webdav: { ...defaultWebdavSyncConfig, ...persistedWebdav, proxyMode: "direct" },
                     config: normalizeAiConfig(persistedConfig),
                 };
             },
         },
     ),
 );
-
-function saveConfigToServer(config: AiConfig) {
-    if (typeof window === "undefined") return;
-    serverSavePromise = serverSavePromise.then(() => saveServerAiConfig(config)).catch(() => {});
-}
 
 function normalizeModelList(models: string[], channels: ModelChannel[]) {
     const allModelOptions = channels.flatMap((channel) => channel.models.map((model) => encodeChannelModel(channel.id, model)));
