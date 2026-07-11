@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-+ [修复] 视频生成适配 chatgpt2api 的 Firefly VEO 同步接口。
++ [修复] 视频生成适配 chatgpt2api 的 Firefly VEO 同步接口与参考图。
 
 + [优化] 同步 Gemini 生图规格、视频生成兼容、图片重试持久化、画布切图和输入法交互改进。
 

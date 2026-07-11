@@ -258,10 +258,9 @@ function normalizeVideoSize(value: string) {
     return ["9:16", "2:3", "3:4"].includes(size) ? "720x1280" : "1280x720";
 }
 
-function normalizeVideoAspectRatio(value: string) {
-    if (/^\d+:\d+$/.test(value)) return value;
-    const match = value.match(/^(\d+)x(\d+)$/);
-    return match ? `${match[1]}:${match[2]}` : "16:9";
+function normalizeChatgpt2apiAspectRatio(value: string) {
+    const [width, height] = value.includes(":") ? value.split(":").map(Number) : value.split("x").map(Number);
+    return width && height && width < height ? "9:16" : "16:9";
 }
 
 function isChatgpt2apiVideoModel(model: string) {
@@ -294,12 +293,19 @@ function unwrapEnvelope<T>(payload: ApiEnvelope<T>, emptyMessage: string): T {
 }
 
 async function createChatgpt2apiVideoTask(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
-    if (references.length || videoReferences.length || audioReferences.length) throw new Error("chatgpt2api 视频接口暂不支持参考素材");
+    if (videoReferences.length || audioReferences.length) throw new Error("chatgpt2api 视频接口暂不支持参考视频或音频");
     try {
+        const payload = { model: modelOptionName(model), prompt, seconds: Math.max(4, Math.min(8, Number(normalizeVideoSeconds(config.videoSeconds)))), aspect_ratio: normalizeChatgpt2apiAspectRatio(config.size) };
+        const body = references.length ? new FormData() : payload;
+        if (body instanceof FormData) {
+            Object.entries(payload).forEach(([key, value]) => body.append(key, String(value)));
+            const files = await Promise.all(references.slice(0, 2).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
+            files.forEach((file) => body.append("image", file));
+        }
         const response = await axios.post<{ data?: Array<{ url?: string }> }>(
             aiApiUrl(config, "/videos/generations"),
-            { model: modelOptionName(model), prompt, seconds: Math.max(4, Math.min(8, Number(normalizeVideoSeconds(config.videoSeconds)))), aspect_ratio: normalizeVideoAspectRatio(config.size) },
-            { headers: aiHeaders(config, "application/json"), signal: options?.signal },
+            body,
+            { headers: aiHeaders(config, body instanceof FormData ? undefined : "application/json"), signal: options?.signal },
         );
         const url = response.data.data?.[0]?.url;
         if (!url) throw new Error("视频接口没有返回地址");
