@@ -23,7 +23,7 @@ type ApiEnvelope<T> = T | { code?: number | string; data?: T | null; msg?: strin
 type RequestOptions = { signal?: AbortSignal };
 
 export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string };
-export type VideoGenerationTask = { id: string; provider: "openai" | "seedance"; model: string };
+export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "chatgpt2api"; model: string; url?: string };
 export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
 
 function aiApiUrl(config: AiConfig, path: string) {
@@ -58,6 +58,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     if (isSeedanceVideoConfig(requestConfig)) {
         return createSeedanceTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     }
+    if (isChatgpt2apiVideoModel(selectedModel)) return createChatgpt2apiVideoTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     if (videoReferences.length || audioReferences.length) {
         throw new Error("当前视频接口不支持参考视频或参考音频，请切换到 Seedance 2.0 / 火山 Agent Plan 模型，或移除参考素材");
     }
@@ -67,6 +68,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
 export async function pollVideoGenerationTask(config: AiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
     const requestConfig = resolveModelRequestConfig(config, task.model);
     assertVideoConfig(requestConfig, requestConfig.model);
+    if (task.provider === "chatgpt2api") return task.url ? { status: "completed", result: await videoResultFromUrl(task.url, options) } : { status: "failed", error: "视频接口没有返回地址" };
     return task.provider === "seedance" ? pollSeedanceTask(requestConfig, task, options) : pollOpenAIVideoTask(requestConfig, task, options);
 }
 
@@ -256,6 +258,16 @@ function normalizeVideoSize(value: string) {
     return ["9:16", "2:3", "3:4"].includes(size) ? "720x1280" : "1280x720";
 }
 
+function normalizeVideoAspectRatio(value: string) {
+    if (/^\d+:\d+$/.test(value)) return value;
+    const match = value.match(/^(\d+)x(\d+)$/);
+    return match ? `${match[1]}:${match[2]}` : "16:9";
+}
+
+function isChatgpt2apiVideoModel(model: string) {
+    return ["firefly-veo31", "firefly-veo31-fast"].includes(modelOptionName(model).toLowerCase());
+}
+
 function normalizeVideoResolution(value: string) {
     if (value === "low") return "480p";
     if (value === "auto" || value === "high" || value === "medium") return "720p";
@@ -279,6 +291,22 @@ function unwrapEnvelope<T>(payload: ApiEnvelope<T>, emptyMessage: string): T {
         return payload.data;
     }
     return payload as T;
+}
+
+async function createChatgpt2apiVideoTask(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
+    if (references.length || videoReferences.length || audioReferences.length) throw new Error("chatgpt2api 视频接口暂不支持参考素材");
+    try {
+        const response = await axios.post<{ data?: Array<{ url?: string }> }>(
+            aiApiUrl(config, "/videos/generations"),
+            { model: modelOptionName(model), prompt, seconds: Math.max(4, Math.min(8, Number(normalizeVideoSeconds(config.videoSeconds)))), aspect_ratio: normalizeVideoAspectRatio(config.size) },
+            { headers: aiHeaders(config, "application/json"), signal: options?.signal },
+        );
+        const url = response.data.data?.[0]?.url;
+        if (!url) throw new Error("视频接口没有返回地址");
+        return { id: url, provider: "chatgpt2api", model, url: new URL(url, config.baseUrl).toString() };
+    } catch (error) {
+        throw new Error(readAxiosError(error, "视频任务创建失败"));
+    }
 }
 
 function videoResultUrl(payload: VideoResponse | SeedanceTask) {
