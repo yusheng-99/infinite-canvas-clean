@@ -13,6 +13,12 @@ const qualityOptions = [
     { value: "low", label: "低" },
 ];
 const DIMENSION_STEP = 16;
+const MAX_DIMENSION = 3840;
+const resolutionOptions = [
+    { value: "1k", label: "1K", base: 1024 },
+    { value: "2k", label: "2K", base: 2048 },
+    { value: "4k", label: "4K", base: 2880 },
+];
 
 const aspectOptions = [
     { value: "1:1", label: "1:1", width: 1024, height: 1024, icon: "square" },
@@ -22,11 +28,7 @@ const aspectOptions = [
     { value: "3:4", label: "3:4", width: 1024, height: 1360, icon: "portrait" },
     { value: "16:9", label: "16:9", width: 1824, height: 1024, icon: "landscape" },
     { value: "9:16", label: "9:16", width: 1024, height: 1824, icon: "portrait" },
-    { value: "1:1-2k", label: "1:1(2k)", size: "2048x2048", width: 2048, height: 2048, icon: "square" },
-    { value: "16:9-2k", label: "16:9(2k)", size: "2048x1152", width: 2048, height: 1152, icon: "landscape" },
-    { value: "9:16-2k", label: "9:16(2k)", size: "1152x2048", width: 1152, height: 2048, icon: "portrait" },
-    { value: "16:9-4k", label: "16:9(4k)", size: "3840x2160", width: 3840, height: 2160, icon: "landscape" },
-    { value: "9:16-4k", label: "9:16(4k)", size: "2160x3840", width: 2160, height: 3840, icon: "portrait" },
+    { value: "21:9", label: "21:9", width: 2384, height: 1024, icon: "landscape" },
     { value: "auto", label: "auto", width: 0, height: 0, icon: "auto" },
 ];
 
@@ -45,12 +47,14 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const quality = config.quality || "auto";
     const count = Math.max(1, Math.min(maxCount, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
-    const selectedAspect = aspectOptions.find((item) => (item.size || item.value) === activeSize || item.value === activeSize);
-    const dimensions = readSizeDimensions(activeSize, selectedAspect || aspectOptions[0]);
+    const dimensions = readSizeDimensions(activeSize, aspectOptions[0]);
+    const selectedAspect = activeSize === "auto" ? aspectOptions.find((item) => item.value === "auto") : aspectOptions.find((item) => item.value !== "auto" && matchesRatio(dimensions, item));
+    const resolution = findResolution(dimensions);
     const selectAspect = (value: string) => {
         const option = aspectOptions.find((item) => item.value === value);
-        onConfigChange("size", option?.size || option?.value || "auto");
+        onConfigChange("size", option?.value === "auto" ? "auto" : resolveDimensions(resolution, option?.value || "1:1"));
     };
+    const selectResolution = (value: string) => onConfigChange("size", resolveDimensions(value, selectedAspect?.value === "auto" ? "1:1" : selectedAspect?.value || "1:1"));
     const updateDimension = (key: "width" | "height", value: number | null) => {
         const next = Math.max(1, Math.floor(value || dimensions[key] || 1024));
         const width = key === "width" ? next : dimensions.width;
@@ -75,6 +79,16 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     <div className="grid grid-cols-4 gap-2.5">
                         {qualityOptions.map((item) => (
                             <OptionPill key={item.value} selected={quality === item.value} theme={theme} onClick={() => onConfigChange("quality", item.value)}>
+                                {item.label}
+                            </OptionPill>
+                        ))}
+                    </div>
+                </div>
+                <div className="space-y-2.5">
+                    <SettingTitle color={theme.node.muted}>分辨率</SettingTitle>
+                    <div className="grid grid-cols-3 gap-2.5">
+                        {resolutionOptions.map((item) => (
+                            <OptionPill key={item.value} selected={resolution === item.value} theme={theme} onClick={() => selectResolution(item.value)}>
                                 {item.label}
                             </OptionPill>
                         ))}
@@ -150,7 +164,9 @@ export function imageQualityLabel(value: string) {
 }
 
 export function imageSizeLabel(size: string) {
-    return aspectOptions.find((item) => (item.size || item.value) === size || item.value === size)?.label || size;
+    if (size === "auto") return "auto";
+    const dimensions = readSizeDimensions(size, aspectOptions[0]);
+    return aspectOptions.find((item) => item.value !== "auto" && matchesRatio(dimensions, item))?.label || size;
 }
 
 function OptionPill({ selected, theme, onClick, children }: { selected: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
@@ -235,10 +251,35 @@ function SettingTitle({ children, color }: { children: string; color: string }) 
 
 function readSizeDimensions(size: string, fallback: { width: number; height: number }) {
     const match = size?.match(/^(\d+)x(\d+)$/);
-    return {
-        width: match ? Number(match[1]) : fallback.width,
-        height: match ? Number(match[2]) : fallback.height,
-    };
+    if (match) return { width: Number(match[1]), height: Number(match[2]) };
+    if (size === "auto") return { width: 0, height: 0 };
+    const [width, height] = size.split(":").map(Number);
+    if (!width || !height) return fallback;
+    return parseDimensions(resolveDimensions("1k", size));
+}
+
+function resolveDimensions(resolution: string, ratio: string) {
+    const [width, height] = ratio.split(":").map(Number);
+    const base = resolutionOptions.find((item) => item.value === resolution)?.base || 1024;
+    const longRatio = Math.max(width, height) / Math.min(width, height);
+    let longSide = Math.floor(Math.sqrt(base * base * longRatio) / DIMENSION_STEP) * DIMENSION_STEP;
+    longSide = Math.min(longSide, MAX_DIMENSION);
+    const shortSide = Math.round((longSide / longRatio) / DIMENSION_STEP) * DIMENSION_STEP;
+    return width >= height ? `${longSide}x${shortSide}` : `${shortSide}x${longSide}`;
+}
+
+function parseDimensions(size: string) {
+    const [width, height] = size.split("x").map(Number);
+    return { width, height };
+}
+
+function matchesRatio(dimensions: { width: number; height: number }, option: { width: number; height: number }) {
+    return Math.abs(dimensions.width / dimensions.height - option.width / option.height) < 0.02;
+}
+
+function findResolution(dimensions: { width: number; height: number }) {
+    const longest = Math.max(dimensions.width, dimensions.height);
+    return longest >= 3600 ? "4k" : longest >= 2000 ? "2k" : "1k";
 }
 
 function alignDimension(value: number, enabled: boolean) {

@@ -115,11 +115,12 @@ function resolveSize(quality: string | undefined, ratio: string): string {
         const targetPixels = basePixels * basePixels;
         const longSideRaw = Math.sqrt(targetPixels * longRatio);
         longSide = Math.floor(longSideRaw / IMAGE_SIZE_STEP) * IMAGE_SIZE_STEP;
-        shortSide = Math.round(longSide / longRatio / IMAGE_SIZE_STEP) * IMAGE_SIZE_STEP;
     } else {
         shortSide = DEFAULT_IMAGE_SHORT_SIDE;
         longSide = Math.round((shortSide * longRatio) / IMAGE_SIZE_STEP) * IMAGE_SIZE_STEP;
     }
+    longSide = Math.min(longSide, IMAGE_MAX_EDGE);
+    shortSide = Math.round(longSide / longRatio / IMAGE_SIZE_STEP) * IMAGE_SIZE_STEP;
 
     const width = isLandscape ? longSide : shortSide;
     const height = isLandscape ? shortSide : longSide;

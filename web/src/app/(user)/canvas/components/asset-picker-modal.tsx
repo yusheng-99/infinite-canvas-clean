@@ -113,6 +113,7 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     const [page, setPage] = useState(1);
     const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
     const [renamingAsset, setRenamingAsset] = useState<Asset | null>(null);
+    const [editingTextAsset, setEditingTextAsset] = useState<Asset | null>(null);
 
     const filtered = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -142,6 +143,15 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
         removeAsset(asset.id);
         setPreviewAsset((current) => (current?.id === asset.id ? null : current));
         setRenamingAsset((current) => (current?.id === asset.id ? null : current));
+        setEditingTextAsset((current) => (current?.id === asset.id ? null : current));
+    };
+
+    const handleEditText = (asset: Asset, content: string) => {
+        if (asset.kind !== "text") return;
+        const data = { content };
+        updateAsset(asset.id, { data });
+        setPreviewAsset((current) => (current?.id === asset.id && current.kind === "text" ? { ...current, data, updatedAt: new Date().toISOString() } : current));
+        setEditingTextAsset(null);
     };
 
     const handleRename = (asset: Asset, title: string) => {
@@ -199,13 +209,14 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                     <Pagination size="small" current={page} pageSize={PAGE_SIZE} total={filtered.length} onChange={setPage} showSizeChanger={false} />
                 </div>
             )}
-            <AssetPreviewModal asset={previewAsset} onClose={() => setPreviewAsset(null)} onInsert={handleInsert} onRename={setRenamingAsset} onDelete={handleDelete} />
+            <AssetPreviewModal asset={previewAsset} onClose={() => setPreviewAsset(null)} onInsert={handleInsert} onRename={setRenamingAsset} onEditText={setEditingTextAsset} onDelete={handleDelete} />
             <RenameAssetModal asset={renamingAsset} onClose={() => setRenamingAsset(null)} onRename={handleRename} />
+            <EditTextAssetModal asset={editingTextAsset} onClose={() => setEditingTextAsset(null)} onSave={handleEditText} />
         </div>
     );
 }
 
-function AssetPreviewModal({ asset, onClose, onInsert, onRename, onDelete }: { asset: Asset | null; onClose: () => void; onInsert: (asset: Asset) => void; onRename: (asset: Asset) => void; onDelete: (asset: Asset) => void }) {
+function AssetPreviewModal({ asset, onClose, onInsert, onRename, onEditText, onDelete }: { asset: Asset | null; onClose: () => void; onInsert: (asset: Asset) => void; onRename: (asset: Asset) => void; onEditText: (asset: Asset) => void; onDelete: (asset: Asset) => void }) {
     const prompt = asset ? getAssetPrompt(asset) : "";
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
     return (
@@ -255,6 +266,11 @@ function AssetPreviewModal({ asset, onClose, onInsert, onRename, onDelete }: { a
                             <Button icon={<PencilLine className="size-4" />} onClick={() => onRename(asset)}>
                                 重命名
                             </Button>
+                            {asset.kind === "text" ? (
+                                <Button icon={<PencilLine className="size-4" />} onClick={() => onEditText(asset)}>
+                                    编辑内容
+                                </Button>
+                            ) : null}
                             <Popconfirm title="删除素材" description={`确定删除「${asset.title}」吗？`} okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => onDelete(asset)}>
                                 <Button danger icon={<Trash2 className="size-4" />}>
                                     删除
@@ -264,6 +280,31 @@ function AssetPreviewModal({ asset, onClose, onInsert, onRename, onDelete }: { a
                     </div>
                 </div>
             ) : null}
+        </Modal>
+    );
+}
+
+function EditTextAssetModal({ asset, onClose, onSave }: { asset: Asset | null; onClose: () => void; onSave: (asset: Asset, content: string) => void }) {
+    const [content, setContent] = useState("");
+
+    useEffect(() => {
+        setContent(asset?.kind === "text" ? asset.data.content : "");
+    }, [asset]);
+
+    return (
+        <Modal
+            title="编辑文本内容"
+            open={Boolean(asset)}
+            onCancel={onClose}
+            onOk={() => {
+                if (asset) onSave(asset, content);
+            }}
+            okText="保存"
+            cancelText="取消"
+            okButtonProps={{ disabled: !content.trim() }}
+            destroyOnHidden
+        >
+            <Input.TextArea autoFocus rows={8} value={content} placeholder="输入文本素材内容" onChange={(event) => setContent(event.target.value)} />
         </Modal>
     );
 }

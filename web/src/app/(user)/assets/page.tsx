@@ -403,7 +403,7 @@ export default function AssetsPage() {
                 />
             </Modal>
 
-            <AssetDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} onRename={(asset) => setRenamingAsset(asset)} onCopy={copyAssetText} onDownload={downloadImage} />
+            <AssetDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} onRename={(asset) => setRenamingAsset(asset)} onEdit={(asset) => { setPreviewAsset(null); openEdit(asset); }} onCopy={copyAssetText} onDownload={downloadImage} />
             <RenameAssetModal asset={renamingAsset} onClose={() => setRenamingAsset(null)} onRename={renameAsset} />
 
             <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
@@ -489,7 +489,7 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
     );
 }
 
-function AssetDrawer({ asset, onClose, onRename, onCopy, onDownload }: { asset: Asset | null; onClose: () => void; onRename: (asset: Asset) => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void }) {
+function AssetDrawer({ asset, onClose, onRename, onEdit, onCopy, onDownload }: { asset: Asset | null; onClose: () => void; onRename: (asset: Asset) => void; onEdit: (asset: Asset) => void; onCopy: (asset: Asset) => void; onDownload: (asset: Asset) => void }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
     return (
         <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
@@ -543,6 +543,11 @@ function AssetDrawer({ asset, onClose, onRename, onCopy, onDownload }: { asset: 
                         <Button icon={<PencilLine className="size-4" />} onClick={() => onRename(asset)}>
                             重命名
                         </Button>
+                        {asset.kind === "text" ? (
+                            <Button icon={<PencilLine className="size-4" />} onClick={() => onEdit(asset)}>
+                                编辑内容
+                            </Button>
+                        ) : null}
                         {asset.kind === "text" ? (
                             <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>
                                 复制文本
