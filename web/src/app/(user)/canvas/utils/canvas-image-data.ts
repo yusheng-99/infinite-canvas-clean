@@ -26,6 +26,8 @@ export type ImageUpscaleParams = {
 export type ImageSplitParams = {
     rows: number;
     columns: number;
+    horizontalLines?: number[];
+    verticalLines?: number[];
 };
 
 export type ImageSplitPiece = {
@@ -49,19 +51,26 @@ export async function splitDataUrl(dataUrl: string, params: ImageSplitParams): P
     const image = await loadImage(dataUrl);
     const rows = Math.max(1, Math.floor(params.rows));
     const columns = Math.max(1, Math.floor(params.columns));
+    const horizontalLines = normalizeLines(params.horizontalLines, rows);
+    const verticalLines = normalizeLines(params.verticalLines, columns);
     const pieces: ImageSplitPiece[] = [];
 
     for (let row = 0; row < rows; row += 1) {
-        const sy = Math.floor((row * image.height) / rows);
-        const sh = Math.floor(((row + 1) * image.height) / rows) - sy;
+        const sy = Math.floor((horizontalLines[row] || 0) * image.height);
+        const sh = Math.floor((horizontalLines[row + 1] || 1) * image.height) - sy;
         for (let column = 0; column < columns; column += 1) {
-            const sx = Math.floor((column * image.width) / columns);
-            const sw = Math.floor(((column + 1) * image.width) / columns) - sx;
+            const sx = Math.floor((verticalLines[column] || 0) * image.width);
+            const sw = Math.floor((verticalLines[column + 1] || 1) * image.width) - sx;
             pieces.push({ row, column, dataUrl: drawCrop(image, sx, sy, sw, sh) });
         }
     }
 
     return pieces;
+}
+
+function normalizeLines(lines: number[] | undefined, count: number) {
+    const values = lines?.length === count - 1 ? lines : Array.from({ length: count - 1 }, (_, index) => (index + 1) / count);
+    return [0, ...values.map((value) => Math.max(0, Math.min(1, value))).sort((a, b) => a - b), 1];
 }
 
 export async function transformAngleDataUrl(dataUrl: string, params: ImageAngleTransform) {

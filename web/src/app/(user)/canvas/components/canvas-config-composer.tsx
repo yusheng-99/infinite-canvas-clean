@@ -142,6 +142,7 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
                     }}
                     onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
                         event.stopPropagation();
+                        if (event.nativeEvent.isComposing) return;
                         if (mention && candidates.length) {
                             if (event.key === "ArrowDown") {
                                 event.preventDefault();

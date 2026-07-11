@@ -133,6 +133,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     props.onPointerUp?.(event);
                 }}
                 onKeyDown={(event) => {
+                    if (event.nativeEvent.isComposing) return;
                     if (mention && candidates.length) {
                         if (event.key === "ArrowDown") {
                             event.preventDefault();
