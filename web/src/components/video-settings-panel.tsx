@@ -1,7 +1,7 @@
 "use client";
 
-import { type ReactNode } from "react";
-import { Switch } from "antd";
+import { type ReactNode, useState } from "react";
+import { InputNumber, Modal, Switch } from "antd";
 
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { boolConfig, isSeedanceFastModel, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceDurationOptions, seedancePixelLabel, seedanceRatioOptions, seedanceResolutionOptions } from "@/lib/seedance-video";
@@ -94,7 +94,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                 {value}s
                             </OptionPill>
                         ))}
-                        <NumberInput value={seconds} min={1} max={20} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
+                        <CustomSecondsButton value={seconds} options={secondOptions} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
                     </div>
                 </SettingGroup>
             </div>
@@ -153,7 +153,7 @@ function SeedanceVideoSettingsPanel({ config, onConfigChange, theme, showTitle, 
                             </OptionPill>
                         ))}
                     </div>
-                    <NumberInput value={String(duration)} min={-1} max={15} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
+                    <CustomSecondsButton value={String(duration)} options={seedanceDurationOptions} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
                 </SettingGroup>
                 <SettingGroup title="输出" color={theme.node.muted}>
                     <div className="grid gap-2 rounded-xl border p-2.5" style={{ borderColor: theme.node.stroke }}>
@@ -236,8 +236,24 @@ function DimensionInput({ prefix, value, disabled, theme, onChange }: { prefix: 
     );
 }
 
-function NumberInput({ value, min, max, theme, onChange }: { value: string; min: number; max: number; theme: CanvasTheme; onChange: (value: string) => void }) {
-    return <input type="number" min={min} max={max} className="h-9 rounded-full border bg-transparent px-3 text-center text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" style={{ borderColor: theme.node.stroke, color: theme.node.text, WebkitTextFillColor: theme.node.text }} value={value} onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} />;
+function CustomSecondsButton({ value, options, theme, onChange }: { value: string; options: readonly number[]; theme: CanvasTheme; onChange: (value: string) => void }) {
+    const [open, setOpen] = useState(false);
+    const [seconds, setSeconds] = useState(Number(value) || 1);
+    const submit = () => {
+        onChange(String(Math.max(1, Math.floor(seconds || 1))));
+        setOpen(false);
+    };
+
+    return (
+        <>
+            <OptionPill selected={!options.includes(Number(value))} theme={theme} onClick={() => { setSeconds(Number(value) || 1); setOpen(true); }}>
+                自定义
+            </OptionPill>
+            <Modal title="自定义视频秒数" open={open} onCancel={() => setOpen(false)} onOk={submit} okText="确定" cancelText="取消" centered>
+                <InputNumber className="w-full" min={1} value={seconds} onChange={(next) => setSeconds(Number(next) || 1)} addonAfter="秒" />
+            </Modal>
+        </>
+    );
 }
 
 function SizePreview({ width, height, color }: { width: number; height: number; color: string }) {
