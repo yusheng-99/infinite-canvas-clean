@@ -30,6 +30,7 @@ export function CanvasVideoSettingsPopover({ config, onConfigChange, buttonClass
         const closeOnOutsidePointer = (event: PointerEvent) => {
             const target = event.target;
             if (!(target instanceof Node)) return;
+            if (document.querySelector(".ant-modal-root")) return;
             if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
             setOpen(false);
         };
