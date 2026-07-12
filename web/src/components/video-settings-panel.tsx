@@ -249,7 +249,7 @@ function CustomSecondsButton({ value, options, theme, onChange }: { value: strin
             <OptionPill selected={!options.includes(Number(value))} theme={theme} onClick={() => { setSeconds(Number(value) || 1); setOpen(true); }}>
                 自定义
             </OptionPill>
-            <Modal title="自定义视频秒数" open={open} onCancel={() => setOpen(false)} onOk={submit} okText="确定" cancelText="取消" centered>
+            <Modal title="自定义视频秒数" open={open} onCancel={() => setOpen(false)} onOk={submit} okText="确定" cancelText="取消" centered zIndex={2000}>
                 <InputNumber className="w-full" min={1} value={seconds} onChange={(next) => setSeconds(Number(next) || 1)} addonAfter="秒" />
             </Modal>
         </>
