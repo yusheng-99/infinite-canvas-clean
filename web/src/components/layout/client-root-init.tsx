@@ -3,10 +3,13 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { App } from "antd";
+import localforage from "localforage";
 
 import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
+
+const videoLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
@@ -22,7 +25,13 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (cleanedFiles.current || !assetHydrated || !canvasHydrated) return;
         cleanedFiles.current = true;
-        cleanupImages();
+        void (async () => {
+            const videoLogs: unknown[] = [];
+            await videoLogStore.iterate((log) => {
+                videoLogs.push(log);
+            });
+            cleanupImages({ videoLogs });
+        })();
     }, [assetHydrated, canvasHydrated, cleanupImages]);
 
     useEffect(() => {
