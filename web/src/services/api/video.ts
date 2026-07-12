@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { dataUrlToFile } from "@/lib/image-utils";
+import { isRay314VideoModel, normalizeRay314Duration, normalizeRay314Resolution, normalizeRay314Size } from "@/lib/ray314-video";
 import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildSeedancePromptText, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
@@ -86,12 +87,15 @@ export async function storeGeneratedVideo(result: VideoGenerationResult): Promis
 }
 
 async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], options?: RequestOptions): Promise<VideoGenerationTask> {
+    const modelName = modelOptionName(model);
+    const ray314 = isRay314VideoModel(modelName);
     const body = new FormData();
-    body.append("model", modelOptionName(model));
+    body.append("model", modelName);
     body.append("prompt", prompt);
-    body.append("seconds", normalizeVideoSeconds(config.videoSeconds));
-    if (normalizeVideoSize(config.size)) body.append("size", normalizeVideoSize(config.size)!);
-    body.append("resolution_name", normalizeVideoResolution(config.vquality));
+    body.append("seconds", ray314 ? String(normalizeRay314Duration(config.videoSeconds)) : normalizeVideoSeconds(config.videoSeconds));
+    const size = ray314 ? normalizeRay314Size(config.size) : normalizeVideoSize(config.size);
+    if (size) body.append("size", size);
+    body.append("resolution_name", ray314 ? `${normalizeRay314Resolution(config.vquality)}p` : normalizeVideoResolution(config.vquality));
     body.append("preset", "normal");
     const files = await Promise.all(references.slice(0, 7).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     files.forEach((file) => body.append("input_reference[]", file));
