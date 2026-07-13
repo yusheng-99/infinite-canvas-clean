@@ -18,12 +18,12 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
-    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: colorTheme === "dark" ? "0 18px 45px rgba(0,0,0,.32)" : "0 16px 40px rgba(28,25,23,.12)" };
+    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: colorTheme === "dark" ? "0 12px 32px rgba(0,0,0,.26)" : "0 10px 30px rgba(15,23,42,.10)" };
     const activeStyle = { background: theme.toolbar.activeBg, color: theme.toolbar.activeText };
 
     return (
-        <div className="absolute bottom-5 left-5 z-50" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <div className="flex h-14 items-center gap-1 rounded-xl border px-2 shadow-lg backdrop-blur" style={dockStyle}>
+        <div className="absolute bottom-4 left-4 z-50 lg:bottom-5 lg:left-5" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            <div className="flex h-12 items-center gap-1 rounded-2xl border px-1.5" style={dockStyle}>
                 <Tooltip title={isMiniMapOpen ? "关闭小地图" : "打开小地图"}>
                     <Button
                         type="text"
@@ -44,7 +44,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
                         max="500"
                         step="1"
                         value={Math.round(scale * 100)}
-                        className="w-24"
+                        className="w-20 sm:w-24"
                         style={{ accentColor: theme.node.activeStroke }}
                         onChange={(event) => onScaleChange(Number(event.target.value) / 100)}
                         aria-label="放大/缩小画布"

@@ -94,6 +94,8 @@ const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
 const IMAGE_BATCH_STAGGER_MS = 900;
+// ponytail: interaction-only media hiding avoids a thumbnail pipeline; add cached thumbnails if idle low-zoom rendering becomes the bottleneck.
+const LIGHTWEIGHT_CANVAS_NODE_COUNT = 12;
 const IMAGE_PREVIEW_MIN_SCALE = 0.25;
 const IMAGE_PREVIEW_MAX_SCALE = 6;
 const IMAGE_PROMPT_REVERSE_PRESET = `请根据参考图片反推一段适合用于 AI 生图的提示词。
@@ -1183,11 +1185,10 @@ function InfiniteCanvasPage() {
 
     const handleViewportChange = useCallback(
         (next: ViewportTransform) => {
-            markViewportInteracting();
             setViewport(next);
             setContextMenu(null);
         },
-        [markViewportInteracting],
+        [],
     );
 
     const applyHistory = useCallback((entry: CanvasHistoryEntry) => {
@@ -2840,8 +2841,10 @@ function InfiniteCanvasPage() {
                 <InfiniteCanvas
                     containerRef={containerRef}
                     viewport={viewport}
+                    lightweight={isViewportInteracting && nodes.length >= LIGHTWEIGHT_CANVAS_NODE_COUNT}
                     backgroundMode={backgroundMode}
                     onViewportChange={handleViewportChange}
+                    onViewportInteraction={markViewportInteracting}
                     onCanvasMouseDown={handleCanvasMouseDown}
                     onCanvasDeselect={deselectCanvas}
                     onContextMenu={preventCanvasContextMenu}
@@ -3163,8 +3166,8 @@ function CanvasTopBar({
 
     return (
         <>
-            <div className="pointer-events-none absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between px-4">
-                <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+            <div className="pointer-events-none absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between px-3 sm:px-5">
+                <div className="pointer-events-auto flex min-w-0 items-center gap-2.5">
                     <Dropdown
                         trigger={["click"]}
                         menu={{
@@ -3182,12 +3185,12 @@ function CanvasTopBar({
                             ],
                         }}
                     >
-                        <button type="button" className="grid size-9 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10" style={{ color: theme.node.text }} aria-label="打开画布菜单">
+                        <button type="button" className="grid size-10 place-items-center rounded-xl transition hover:bg-black/5 dark:hover:bg-white/10" style={{ color: theme.node.text }} aria-label="打开画布菜单">
                             <Menu className="size-5" />
                         </button>
                     </Dropdown>
 
-                    <div ref={titleRef} className="flex min-w-0 items-center gap-2">
+                    <div ref={titleRef} className="flex min-w-0 flex-col items-start">
                         {isTitleEditing ? (
                             <input
                                 autoFocus
@@ -3198,19 +3201,20 @@ function CanvasTopBar({
                                     if (event.key === "Enter") onFinishTitleEditing();
                                     if (event.key === "Escape") onCancelTitleEditing();
                                 }}
-                                className="max-w-[280px] bg-transparent p-0 text-left text-lg font-semibold tracking-normal outline-none"
+                                className="max-w-[280px] bg-transparent p-0 text-left text-[15px] font-semibold tracking-tight outline-none"
                                 style={{ color: theme.node.text }}
                             />
                         ) : (
                             <button
                                 type="button"
-                                className="max-w-[280px] truncate border-b border-dashed border-transparent text-left text-lg font-semibold tracking-normal transition hover:border-current"
+                                className="max-w-[280px] truncate border-b border-dashed border-transparent text-left text-[15px] font-semibold tracking-tight transition hover:border-current"
                                 onDoubleClick={onStartTitleEditing}
                                 title="双击修改画布名称"
                             >
                                 {title}
                             </button>
                         )}
+                        <span className="text-[10px] font-medium uppercase tracking-[0.15em] opacity-40">Infinite canvas</span>
                     </div>
                 </div>
 
