@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
+import localforage from "localforage";
 
 import { nanoid } from "nanoid";
 import { localForageStorage } from "@/lib/localforage-storage";
@@ -38,6 +39,7 @@ type AssetStore = {
 };
 
 const ASSET_STORE_KEY = "infinite-canvas:asset_store";
+const videoLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
 
 const assetStorage: PersistStorage<AssetStore> = {
     getItem: async (name) => {
@@ -90,8 +92,13 @@ export const useAssetStore = create<AssetStore>()(
             cleanupImages: (extra) => {
                 window.setTimeout(async () => {
                     const { useCanvasStore } = await import("@/app/(user)/canvas/stores/use-canvas-store");
-                    await cleanupUnusedImages({ assets: get().assets, projects: useCanvasStore.getState().projects, extra });
-                    await cleanupUnusedMedia({ assets: get().assets, projects: useCanvasStore.getState().projects, extra });
+                    const videoLogs: unknown[] = [];
+                    await videoLogStore.iterate((log) => {
+                        videoLogs.push(log);
+                    });
+                    const usedData = { assets: get().assets, projects: useCanvasStore.getState().projects, videoLogs, extra };
+                    await cleanupUnusedImages(usedData);
+                    await cleanupUnusedMedia(usedData);
                 }, 0);
             },
         }),
