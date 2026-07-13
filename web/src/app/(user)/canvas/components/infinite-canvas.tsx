@@ -213,7 +213,6 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
                 className="absolute origin-top-left"
                 style={{
                     transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.k})`,
-                    willChange: "transform",
                 }}
             >
                 {children}
