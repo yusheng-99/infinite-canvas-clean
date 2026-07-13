@@ -94,8 +94,6 @@ const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
 const IMAGE_BATCH_STAGGER_MS = 900;
-// ponytail: interaction-only media hiding avoids a thumbnail pipeline; add cached thumbnails if idle low-zoom rendering becomes the bottleneck.
-const LIGHTWEIGHT_CANVAS_NODE_COUNT = 12;
 const IMAGE_PREVIEW_MIN_SCALE = 0.25;
 const IMAGE_PREVIEW_MAX_SCALE = 6;
 const IMAGE_PROMPT_REVERSE_PRESET = `请根据参考图片反推一段适合用于 AI 生图的提示词。
@@ -2841,7 +2839,6 @@ function InfiniteCanvasPage() {
                 <InfiniteCanvas
                     containerRef={containerRef}
                     viewport={viewport}
-                    lightweight={isViewportInteracting && nodes.length >= LIGHTWEIGHT_CANVAS_NODE_COUNT}
                     backgroundMode={backgroundMode}
                     onViewportChange={handleViewportChange}
                     onViewportInteraction={markViewportInteracting}

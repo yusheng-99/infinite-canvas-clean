@@ -160,9 +160,6 @@
         @apply text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground;
     }
 
-    [data-canvas-lightweight] .canvas-node-media {
-        visibility: hidden;
-    }
 }
 
 @layer utilities {
