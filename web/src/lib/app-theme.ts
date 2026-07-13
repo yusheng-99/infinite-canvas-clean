@@ -44,7 +44,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             borderRadius: 10,
             borderRadiusLG: 14,
             controlHeight: 36,
-            fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            fontFamily: '"SimSun","宋体",serif',
         },
         components: {
             Button: {
