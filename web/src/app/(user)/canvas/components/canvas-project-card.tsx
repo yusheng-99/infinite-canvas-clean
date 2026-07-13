@@ -29,8 +29,8 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     };
 
     return (
-        <article className="group flex min-h-44 cursor-pointer flex-col justify-between rounded-2xl bg-[#f1eee8] p-5 transition hover:bg-[#ebe6dc] dark:bg-white/5 dark:hover:bg-white/10" onClick={() => !editing && open()}>
-            <div className="flex items-start gap-3">
+        <article className="group relative flex min-h-52 cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-black/[0.06] bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_rgba(15,23,42,.04)] transition duration-200 before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_1px_1px,rgba(100,116,139,.2)_1px,transparent_0)] before:bg-[size:16px_16px] before:opacity-50 hover:-translate-y-1 hover:border-black/[0.12] hover:shadow-[0_18px_42px_rgba(15,23,42,.09)] dark:border-white/[0.08] dark:before:opacity-25 dark:hover:border-white/[0.16]" onClick={() => !editing && open()}>
+            <div className="relative flex items-start gap-3 pt-12">
                 <input
                     type="checkbox"
                     checked={selected}
@@ -50,14 +50,14 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                             open();
                         }}
                     >
-                        <h2 className="truncate text-xl font-semibold">{project.title}</h2>
+                        <h2 className="truncate text-xl font-semibold tracking-tight">{project.title}</h2>
                         <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
                             {project.nodes.length} 个节点 · {project.connections.length} 条连线
                         </p>
                     </button>
                 )}
             </div>
-            <div className="mt-8 flex items-end justify-between gap-3">
+            <div className="relative mt-8 flex items-end justify-between gap-3">
                 <p className="text-xs text-stone-500">更新于 {new Date(project.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
                 <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
                     {editing ? (

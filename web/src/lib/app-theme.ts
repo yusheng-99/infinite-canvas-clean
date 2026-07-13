@@ -41,11 +41,17 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             colorLinkHover: color.primaryHover,
             colorLinkActive: color.primary,
             colorTextLightSolid: color.primaryText,
+            borderRadius: 10,
+            borderRadiusLG: 14,
+            controlHeight: 36,
+            fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         },
         components: {
             Button: {
                 primaryShadow: "none",
+                borderRadius: 10,
             },
+            Input: { activeShadow: "0 0 0 3px rgba(24, 24, 27, 0.08)" },
             Menu: {
                 itemActiveBg: color.menuBg,
                 itemHoverBg: color.menuBg,

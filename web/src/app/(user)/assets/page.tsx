@@ -198,15 +198,16 @@ export default function AssetsPage() {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-background text-stone-900 dark:text-stone-100">
-            <main className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] px-6 py-8 [background-size:16px_16px] dark:bg-[radial-gradient(rgba(245,245,244,.14)_1px,transparent_1px)]">
+        <div className="workspace-shell">
+            <main className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
-                        <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">我的素材</h1>
+                        <p className="page-eyebrow mb-3">Asset library</p>
+                        <h1 className="text-4xl font-semibold tracking-tight text-foreground">我的素材</h1>
                         <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本和图片，按类型、标题和标签快速查找。</p>
                     </div>
 
-                    <div className="mx-auto mt-8 w-full max-w-2xl">
+                    <div className="mx-auto mt-8 w-full max-w-3xl">
                         <Input.Search
                             className="w-full"
                             size="large"

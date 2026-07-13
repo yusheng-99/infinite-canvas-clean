@@ -21,19 +21,21 @@ export function AppTopNav() {
     return (
         <>
             {!hideHeader ? (
-                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-stone-200 bg-background/90 backdrop-blur-xl dark:border-stone-800">
-                    <div className="mx-auto flex h-full max-w-7xl items-stretch justify-between gap-5 px-6">
+                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-black/[0.06] bg-background/85 backdrop-blur-2xl dark:border-white/[0.07]">
+                    <div className="mx-auto flex h-full max-w-[1600px] items-stretch justify-between gap-5 px-4 sm:px-6 lg:px-8">
                         {!hideEntrances ? (
                             <div className="flex min-w-0 items-center">
-                                <Link to="/" className="flex h-full shrink-0 items-center gap-2 text-sm font-semibold leading-none tracking-tight text-stone-950 transition hover:text-stone-600 dark:text-stone-100 dark:hover:text-stone-300">
+                                <Link to="/" className="flex h-full shrink-0 items-center gap-2.5 text-sm font-semibold leading-none tracking-tight text-foreground transition hover:opacity-70">
+                                    <span className="grid size-9 place-items-center rounded-xl bg-foreground text-background shadow-sm">
                                     <span
-                                        className="size-5 shrink-0 bg-current"
+                                        className="size-4 shrink-0 bg-current"
                                         style={{
                                             mask: "url(/logo.svg) center / contain no-repeat",
                                             WebkitMask: "url(/logo.svg) center / contain no-repeat",
                                         }}
                                     />
-                                    <span className="text-base font-medium">无限画布</span>
+                                    </span>
+                                    <span className="text-[15px] font-semibold">无限画布</span>
                                 </Link>
 
                                 <button
@@ -46,7 +48,7 @@ export function AppTopNav() {
                                     <Menu className="size-5" />
                                 </button>
 
-                                <nav className="hide-scrollbar ml-8 hidden h-16 min-w-0 items-center gap-7 overflow-x-auto md:flex">
+                                <nav className="hide-scrollbar ml-8 hidden h-16 min-w-0 items-center gap-1 overflow-x-auto md:flex">
                                     {navigationTools.map((tool) => {
                                         const Icon = tool.icon;
                                         const active = tool.slug === activeToolSlug;
@@ -55,10 +57,10 @@ export function AppTopNav() {
                                                 key={tool.slug}
                                                 to={`/${tool.slug}`}
                                                 className={cn(
-                                                    "relative flex h-16 shrink-0 items-center gap-2 text-sm leading-6 transition after:absolute after:inset-x-0 after:bottom-0 after:h-px",
+                                                    "flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-sm leading-6 transition",
                                                     active
-                                                        ? "font-medium text-stone-950 after:bg-stone-950 dark:text-stone-100 dark:after:bg-stone-100"
-                                                        : "text-stone-500 after:bg-transparent hover:text-stone-950 dark:text-stone-400 dark:hover:text-stone-100",
+                                                        ? "bg-foreground font-medium text-background shadow-sm"
+                                                        : "text-muted-foreground hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]",
                                                 )}
                                             >
                                                 <Icon className="size-4" />
