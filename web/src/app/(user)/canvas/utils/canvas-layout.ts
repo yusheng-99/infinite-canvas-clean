@@ -186,12 +186,11 @@ function compactAxis(nodes: CanvasNodeData[], batchLayouts: Map<string, BatchLay
         });
     let cursor = bands[0]?.start || 0;
     bands.forEach((band) => {
-        const offset = cursor - band.start;
         band.nodes.forEach((node) => {
             const position = positions.get(node.id)!;
-            positions.set(node.id, axis === "x" ? { ...position, x: position.x + offset } : { ...position, y: position.y + offset });
+            positions.set(node.id, axis === "x" ? { ...position, x: cursor } : { ...position, y: cursor });
         });
-        cursor = band.end + offset + gap;
+        cursor += Math.max(...band.nodes.map((node) => layoutSize(node, batchLayouts)[sizeKey])) + gap;
     });
 }
 
