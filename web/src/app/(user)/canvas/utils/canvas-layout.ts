@@ -6,6 +6,7 @@ export type CanvasAlignmentGuides = { x?: number; y?: number };
 
 type DragNode = Pick<CanvasNodeData, "id" | "width" | "height"> & { position: Position };
 type BatchLayout = { width: number; height: number; children: { node: CanvasNodeData; position: Position }[] };
+type GraphEdge = { fromNodeId: string; toNodeId: string };
 
 const HORIZONTAL_GAP = 120;
 const VERTICAL_GAP = 48;
@@ -27,55 +28,25 @@ export function autoArrangeCanvasNodes(nodes: CanvasNodeData[], connections: Can
     });
     const layoutNodes = targets.filter((node) => !ownerByChild.has(node.id));
     const layoutIdSet = new Set(layoutNodes.map((node) => node.id));
-    const related = new Map<string, { fromNodeId: string; toNodeId: string }>();
+    const related = new Map<string, GraphEdge>();
     connections.forEach((connection) => {
         const fromNodeId = ownerByChild.get(connection.fromNodeId) || connection.fromNodeId;
         const toNodeId = ownerByChild.get(connection.toNodeId) || connection.toNodeId;
         if (fromNodeId === toNodeId || !layoutIdSet.has(fromNodeId) || !layoutIdSet.has(toNodeId)) return;
         related.set(`${fromNodeId}:${toNodeId}`, { fromNodeId, toNodeId });
     });
-    const degree = new Map(layoutNodes.map((node) => [node.id, 0]));
-    const indegree = new Map(layoutNodes.map((node) => [node.id, 0]));
-    const outgoing = new Map<string, string[]>();
-    related.forEach((connection) => {
-        degree.set(connection.fromNodeId, (degree.get(connection.fromNodeId) || 0) + 1);
-        degree.set(connection.toNodeId, (degree.get(connection.toNodeId) || 0) + 1);
-        indegree.set(connection.toNodeId, (indegree.get(connection.toNodeId) || 0) + 1);
-        outgoing.set(connection.fromNodeId, [...(outgoing.get(connection.fromNodeId) || []), connection.toNodeId]);
+    const edges = [...related.values()];
+    const connectedIds = new Set(edges.flatMap((edge) => [edge.fromNodeId, edge.toNodeId]));
+    const connected = layoutNodes.filter((node) => connectedIds.has(node.id));
+    const isolated = layoutNodes.filter((node) => !connectedIds.has(node.id));
+    let connectedBottom = Math.min(...layoutNodes.map((node) => node.position.y));
+    graphComponents(connected, edges).forEach((component) => {
+        const bounds = layoutGraphComponent(component, edges, batchLayouts, positions);
+        connectedBottom = Math.max(connectedBottom, bounds.bottom);
     });
-
-    const connected = layoutNodes.filter((node) => degree.get(node.id));
-    const isolated = layoutNodes.filter((node) => !degree.get(node.id));
-    const rank = new Map(connected.map((node) => [node.id, 0]));
-    const queue = connected.filter((node) => indegree.get(node.id) === 0).sort(byPosition).map((node) => node.id);
-    while (queue.length) {
-        const id = queue.shift()!;
-        (outgoing.get(id) || []).forEach((nextId) => {
-            rank.set(nextId, Math.max(rank.get(nextId) || 0, (rank.get(id) || 0) + 1));
-            indegree.set(nextId, (indegree.get(nextId) || 0) - 1);
-            if (indegree.get(nextId) === 0) queue.push(nextId);
-        });
-    }
 
     const originX = Math.min(...layoutNodes.map((node) => node.position.x));
     const originY = Math.min(...layoutNodes.map((node) => node.position.y));
-    const columns = new Map<number, CanvasNodeData[]>();
-    connected.forEach((node) => columns.set(rank.get(node.id) || 0, [...(columns.get(rank.get(node.id) || 0) || []), node]));
-
-    let columnX = originX;
-    let connectedBottom = originY;
-    [...columns.keys()].sort((a, b) => a - b).forEach((column) => {
-        const columnNodes = columns.get(column)!.sort((a, b) => a.position.y - b.position.y);
-        let y = originY;
-        columnNodes.forEach((node) => {
-            const size = layoutSize(node, batchLayouts);
-            positions.set(node.id, { x: columnX, y });
-            y += size.height + VERTICAL_GAP;
-        });
-        connectedBottom = Math.max(connectedBottom, y - VERTICAL_GAP);
-        columnX += Math.max(...columnNodes.map((node) => layoutSize(node, batchLayouts).width)) + HORIZONTAL_GAP;
-    });
-
     let rowY = connected.length ? connectedBottom + 80 : originY;
     for (let index = 0; index < isolated.length; index += 4) {
         const row = isolated.slice(index, index + 4).sort(byPosition);
@@ -195,6 +166,109 @@ function createBatchLayout(root: CanvasNodeData, children: CanvasNodeData[]): Ba
 
 function layoutSize(node: CanvasNodeData, batchLayouts: Map<string, BatchLayout>) {
     return batchLayouts.get(node.id) || node;
+}
+
+function graphComponents(nodes: CanvasNodeData[], edges: GraphEdge[]) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const neighbors = new Map(nodes.map((node) => [node.id, new Set<string>()]));
+    edges.forEach((edge) => {
+        neighbors.get(edge.fromNodeId)?.add(edge.toNodeId);
+        neighbors.get(edge.toNodeId)?.add(edge.fromNodeId);
+    });
+    const remaining = new Set(nodeById.keys());
+    const components: CanvasNodeData[][] = [];
+    [...nodes].sort(byPosition).forEach((node) => {
+        if (!remaining.delete(node.id)) return;
+        const ids = [node.id];
+        const stack = [node.id];
+        while (stack.length) {
+            (neighbors.get(stack.pop()!) || []).forEach((id) => {
+                if (!remaining.delete(id)) return;
+                ids.push(id);
+                stack.push(id);
+            });
+        }
+        components.push(ids.map((id) => nodeById.get(id)!));
+    });
+    return components;
+}
+
+function layoutGraphComponent(nodes: CanvasNodeData[], edges: GraphEdge[], batchLayouts: Map<string, BatchLayout>, positions: Map<string, Position>) {
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const componentEdges = edges.filter((edge) => nodeById.has(edge.fromNodeId) && nodeById.has(edge.toNodeId));
+    const indegree = new Map(nodes.map((node) => [node.id, 0]));
+    const outgoing = new Map<string, string[]>();
+    componentEdges.forEach((edge) => {
+        indegree.set(edge.toNodeId, (indegree.get(edge.toNodeId) || 0) + 1);
+        outgoing.set(edge.fromNodeId, [...(outgoing.get(edge.fromNodeId) || []), edge.toNodeId]);
+    });
+    const rank = new Map(nodes.map((node) => [node.id, 0]));
+    const queue = nodes.filter((node) => indegree.get(node.id) === 0).sort(byPosition).map((node) => node.id);
+    while (queue.length) {
+        const id = queue.shift()!;
+        (outgoing.get(id) || []).forEach((nextId) => {
+            rank.set(nextId, Math.max(rank.get(nextId) || 0, (rank.get(id) || 0) + 1));
+            indegree.set(nextId, (indegree.get(nextId) || 0) - 1);
+            if (indegree.get(nextId) === 0) queue.push(nextId);
+        });
+    }
+
+    let horizontalScore = 0;
+    let verticalScore = 0;
+    let horizontalDirection = 0;
+    let verticalDirection = 0;
+    componentEdges.forEach((edge) => {
+        const from = nodeById.get(edge.fromNodeId)!;
+        const to = nodeById.get(edge.toNodeId)!;
+        const dx = to.position.x + to.width / 2 - from.position.x - from.width / 2;
+        const dy = to.position.y + to.height / 2 - from.position.y - from.height / 2;
+        horizontalScore += Math.abs(dx);
+        verticalScore += Math.abs(dy);
+        horizontalDirection += dx;
+        verticalDirection += dy;
+    });
+    const horizontal = horizontalScore >= verticalScore;
+    const direction = (horizontal ? horizontalDirection : verticalDirection) < 0 ? -1 : 1;
+    const groups = new Map<number, CanvasNodeData[]>();
+    nodes.forEach((node) => groups.set(rank.get(node.id) || 0, [...(groups.get(rank.get(node.id) || 0) || []), node]));
+    const orderedGroups = [...groups.keys()].sort((a, b) => a - b).map((key) => groups.get(key)!);
+    const originX = Math.min(...nodes.map((node) => node.position.x));
+    const originY = Math.min(...nodes.map((node) => node.position.y));
+    let right = originX;
+    let bottom = originY;
+
+    if (horizontal) {
+        let cursor = direction > 0 ? originX : Math.max(...nodes.map((node) => node.position.x + layoutSize(node, batchLayouts).width));
+        orderedGroups.forEach((group) => {
+            const width = Math.max(...group.map((node) => layoutSize(node, batchLayouts).width));
+            const x = direction > 0 ? cursor : cursor - width;
+            let y = originY;
+            group.sort((a, b) => a.position.y - b.position.y).forEach((node) => {
+                const size = layoutSize(node, batchLayouts);
+                positions.set(node.id, { x, y });
+                right = Math.max(right, x + size.width);
+                bottom = Math.max(bottom, y + size.height);
+                y += size.height + VERTICAL_GAP;
+            });
+            cursor = direction > 0 ? x + width + HORIZONTAL_GAP : x - HORIZONTAL_GAP;
+        });
+    } else {
+        let cursor = direction > 0 ? originY : Math.max(...nodes.map((node) => node.position.y + layoutSize(node, batchLayouts).height));
+        orderedGroups.forEach((group) => {
+            const height = Math.max(...group.map((node) => layoutSize(node, batchLayouts).height));
+            const y = direction > 0 ? cursor : cursor - height;
+            let x = originX;
+            group.sort((a, b) => a.position.x - b.position.x).forEach((node) => {
+                const size = layoutSize(node, batchLayouts);
+                positions.set(node.id, { x, y });
+                right = Math.max(right, x + size.width);
+                bottom = Math.max(bottom, y + size.height);
+                x += size.width + VERTICAL_GAP;
+            });
+            cursor = direction > 0 ? y + height + HORIZONTAL_GAP : y - HORIZONTAL_GAP;
+        });
+    }
+    return { right, bottom };
 }
 
 function byPosition(a: CanvasNodeData, b: CanvasNodeData) {
