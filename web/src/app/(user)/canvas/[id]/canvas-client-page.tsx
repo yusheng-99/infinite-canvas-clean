@@ -3321,9 +3321,16 @@ function audioMetadata(audio: UploadedFile): CanvasNodeMetadata {
 function findGeneratedNodeSlot(sourceId: string, fallback: Position, size: { width: number; height: number }, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const outputIds = new Set(connections.filter((connection) => connection.fromNodeId === sourceId).map((connection) => connection.toNodeId));
     const outputRoots = nodes.filter((node) => outputIds.has(node.id) && !node.metadata?.batchRootId);
-    const anchor = [...outputRoots].sort((a, b) => Math.abs(a.position.x - fallback.x) - Math.abs(b.position.x - fallback.x))[0];
-    const x = anchor?.position.x ?? fallback.x;
-    let y = fallback.y;
+    const columns: { x: number; bottom: number }[] = [];
+    [...outputRoots].sort((a, b) => a.position.x - b.position.x).forEach((node) => {
+        const bounds = nodeGroupBounds(node, nodes);
+        const column = columns.find((item) => Math.abs(item.x - node.position.x) <= 64);
+        if (column) column.bottom = Math.max(column.bottom, bounds.bottom);
+        else columns.push({ x: node.position.x, bottom: bounds.bottom });
+    });
+    const column = columns.sort((a, b) => a.bottom - b.bottom || b.x - a.x)[0];
+    const x = column?.x ?? fallback.x;
+    let y = column ? Math.max(fallback.y, column.bottom + 48) : fallback.y;
     const obstacles = nodes.filter((node) => node.id !== sourceId && !node.metadata?.batchRootId).map((node) => nodeGroupBounds(node, nodes));
     for (let attempt = 0; attempt <= obstacles.length; attempt += 1) {
         const overlapping = obstacles.filter((bounds) => x < bounds.right + 36 && x + size.width + 36 > bounds.left && y < bounds.bottom + 48 && y + size.height + 48 > bounds.top);
