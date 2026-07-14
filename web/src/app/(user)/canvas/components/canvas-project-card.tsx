@@ -29,14 +29,14 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
     };
 
     return (
-        <article className="group relative flex min-h-52 cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-black/[0.06] bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_rgba(15,23,42,.04)] transition duration-200 before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_1px_1px,rgba(100,116,139,.2)_1px,transparent_0)] before:bg-[size:16px_16px] before:opacity-50 hover:-translate-y-1 hover:border-black/[0.12] hover:shadow-[0_18px_42px_rgba(15,23,42,.09)] dark:border-white/[0.08] dark:before:opacity-25 dark:hover:border-white/[0.16]" onClick={() => !editing && open()}>
-            <div className="relative flex items-start gap-3 pt-12">
+        <article className="group relative flex min-h-44 cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-5 shadow-[0_10px_30px_rgba(43,54,74,.05)] transition duration-200 before:absolute before:inset-x-0 before:top-0 before:h-16 before:bg-[radial-gradient(circle_at_1px_1px,rgba(37,99,235,.2)_1px,transparent_0)] before:bg-[size:16px_16px] before:opacity-50 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_16px_38px_rgba(37,99,235,.10)] dark:before:opacity-30" onClick={() => !editing && open()}>
+            <div className="relative flex items-start gap-3 pt-8">
                 <input
                     type="checkbox"
                     checked={selected}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => toggleSelected(project.id, event.target.checked)}
-                    className="mt-1 size-4 accent-stone-950 dark:accent-stone-100"
+                        className="mt-1 size-4 accent-primary"
                     aria-label={`选择 ${project.title}`}
                 />
                 {editing ? (
@@ -51,14 +51,14 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                         }}
                     >
                         <h2 className="truncate text-xl font-semibold tracking-tight">{project.title}</h2>
-                        <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                             {project.nodes.length} 个节点 · {project.connections.length} 条连线
                         </p>
                     </button>
                 )}
             </div>
-            <div className="relative mt-8 flex items-end justify-between gap-3">
-                <p className="text-xs text-stone-500">更新于 {new Date(project.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
+            <div className="relative mt-5 flex items-end justify-between gap-3">
+                <p className="text-xs text-muted-foreground">更新于 {new Date(project.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
                 <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
                     {editing ? (
                         <>

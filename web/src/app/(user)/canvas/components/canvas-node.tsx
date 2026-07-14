@@ -269,11 +269,11 @@ export const CanvasNode = React.memo(function CanvasNode({
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
             <div
-                className="relative h-full w-full overflow-visible rounded-2xl border"
+                className="relative h-full w-full overflow-visible rounded-2xl border-2"
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
                     borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
-                    boxShadow: isViewportInteracting ? undefined : isActive ? `0 0 0 2px ${selectionBlue}28, 0 10px 28px rgba(15,23,42,.10)` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}44` : undefined,
+                    boxShadow: isViewportInteracting ? undefined : isActive ? `0 0 0 2px ${selectionBlue}28, 0 10px 28px rgba(15,23,42,.10)` : isRelated && !isBatchChild ? `0 0 0 1px ${theme.node.muted}44` : theme.node.shadow,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {

@@ -10,7 +10,6 @@ import { router } from "@/router";
 document.documentElement.lang = "zh-CN";
 document.documentElement.classList.add("font-sans");
 document.body.className = "bg-background text-foreground antialiased";
-document.body.style.fontFamily = '"SimSun","宋体",serif';
 
 try {
     const state = JSON.parse(localStorage.getItem("infinite-canvas:theme_store") || "{}");

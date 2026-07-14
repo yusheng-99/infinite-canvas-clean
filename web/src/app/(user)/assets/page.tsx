@@ -203,7 +203,7 @@ export default function AssetsPage() {
             <main className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
-                        <p className="page-eyebrow mb-3">Asset library</p>
+                        <p className="page-eyebrow mb-3 justify-center">素材管理</p>
                         <h1 className="text-4xl font-semibold tracking-tight text-foreground">我的素材</h1>
                         <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本、图片、视频和节点组，按类型、标题和标签快速查找。</p>
                     </div>
@@ -426,12 +426,12 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
             className="overflow-hidden"
             styles={{ body: { padding: 0 } }}
             cover={
-                <button type="button" className="block h-44 w-full overflow-hidden text-left" onClick={onOpen}>
+                <button type="button" className="block h-36 w-full overflow-hidden text-left" onClick={onOpen}>
                     {cover ? (
                         <img src={cover} alt={asset.title} className="size-full object-cover" />
                     ) : (
                         <div className="flex size-full items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">
-                            <span className="line-clamp-7">{asset.kind === "text" ? asset.data.content : asset.kind === "node-group" ? summary : "暂无封面"}</span>
+                            <span className="line-clamp-4">{asset.kind === "text" ? asset.data.content : asset.kind === "node-group" ? summary : "暂无封面"}</span>
                         </div>
                     )}
                 </button>
@@ -448,9 +448,11 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
                         </div>
                         <Tag className="m-0 shrink-0 text-[11px]">{assetKindLabel(asset)}</Tag>
                     </div>
-                    <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} className="!mb-0 !mt-2 !text-xs !leading-5">
-                        {summary}
-                    </Typography.Paragraph>
+                    {asset.kind !== "text" || asset.note ? (
+                        <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} className="!mb-0 !mt-2 !text-xs !leading-5">
+                            {asset.kind === "text" ? asset.note : summary}
+                        </Typography.Paragraph>
+                    ) : null}
                     <div className="mt-3 flex flex-wrap gap-1.5">
                         {(asset.tags || []).slice(0, 3).map((tag) => (
                             <Tag key={tag} className="m-0 text-[11px]">
@@ -461,31 +463,25 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
                     </div>
                 </div>
             </button>
-            <div className="flex items-center gap-2 px-4 pb-4">
-                <Button size="small" onClick={onOpen}>
-                    查看
-                </Button>
-                <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onRename}>
-                    重命名
-                </Button>
-                {asset.kind === "text" || asset.kind === "image" ? (
-                    <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>
-                        编辑
-                    </Button>
-                ) : null}
+            <div className="flex items-center justify-between gap-2 px-4 pb-4">
                 {asset.kind === "text" ? (
-                    <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)}>
+                    <Button type="primary" size="small" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)}>
                         复制
                     </Button>
-                ) : null}
-                {asset.kind === "image" || asset.kind === "video" ? (
-                    <Button size="small" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)}>
+                ) : asset.kind === "image" || asset.kind === "video" ? (
+                    <Button type="primary" size="small" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)}>
                         下载
                     </Button>
-                ) : null}
-                <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>
-                    删除
-                </Button>
+                ) : (
+                    <Button type="primary" size="small" onClick={onOpen}>
+                        查看
+                    </Button>
+                )}
+                <div className="flex items-center">
+                    <Button type="text" size="small" onClick={onRename}>重命名</Button>
+                    {asset.kind === "text" || asset.kind === "image" ? <Button type="text" size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>编辑</Button> : null}
+                    <Button type="text" size="small" danger icon={<Trash2 className="size-3.5" />} aria-label="删除素材" title="删除" onClick={onDelete} />
+                </div>
             </div>
         </Card>
     );

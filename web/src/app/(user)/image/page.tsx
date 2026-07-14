@@ -321,8 +321,8 @@ export default function ImagePage() {
 
     return (
         <div className="workspace-shell">
-            <main className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:overflow-hidden 2xl:grid-cols-[300px_minmax(0,1fr)]">
-                <aside className="workspace-panel thin-scrollbar hidden min-h-0 overflow-y-auto p-4 lg:block">
+            <main className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 lg:overflow-hidden 2xl:grid-cols-[300px_minmax(0,1fr)]">
+                <aside className="workspace-panel thin-scrollbar hidden min-h-0 overflow-y-auto p-4 2xl:block">
                     <LogPanel
                         logs={logs}
                         selectedLogIds={selectedLogIds}
@@ -334,21 +334,18 @@ export default function ImagePage() {
                     />
                 </aside>
 
-                <section className="grid gap-4 lg:min-h-0 lg:overflow-hidden xl:grid-cols-[400px_minmax(0,1fr)] 2xl:grid-cols-[440px_minmax(0,1fr)]">
-                    <div className="workspace-panel thin-scrollbar flex flex-col p-5 lg:min-h-0 lg:overflow-y-auto">
+                <section className="grid gap-4 lg:min-h-0 lg:grid-cols-[minmax(360px,400px)_minmax(0,1fr)] lg:overflow-hidden 2xl:grid-cols-[440px_minmax(0,1fr)]">
+                    <div className="workspace-panel flex flex-col overflow-hidden lg:min-h-0">
+                        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
                         <div>
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                    <p className="page-eyebrow mb-2">Image studio</p>
-                                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">生图工作台</h1>
+                                    <p className="page-eyebrow mb-2">图像创作</p>
+                                    <h1 className="whitespace-nowrap text-xl font-semibold tracking-tight text-foreground sm:text-2xl">生图工作台</h1>
                                 </div>
-                                <div className="flex shrink-0 gap-2 lg:hidden">
-                                    <Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>
-                                        记录
-                                    </Button>
-                                    <Button icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>
-                                        参数
-                                    </Button>
+                                <div className="flex shrink-0 gap-2">
+                                    <div className="2xl:hidden"><Button icon={<History className="size-4" />} onClick={() => setLogsOpen(true)}>记录</Button></div>
+                                    <div className="lg:hidden"><Button icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>参数</Button></div>
                                 </div>
                             </div>
                         </div>
@@ -363,7 +360,7 @@ export default function ImagePage() {
                                         </Button>
                                     </div>
                                 </div>
-                                <Input.TextArea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={7} placeholder="描述画面主体、风格、构图、光线和用途" />
+                                <Input.TextArea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} placeholder="描述画面主体、风格、构图、光线和用途" />
                             </div>
 
                             <div className="min-w-0">
@@ -419,7 +416,8 @@ export default function ImagePage() {
                             </div>
                         </div>
 
-                        <div className="mt-auto pt-6">
+                        </div>
+                        <div className="shrink-0 border-t border-border/80 bg-card/90 p-4 backdrop-blur">
                             <Button type="primary" size="large" block icon={<Sparkles className="size-4" />} loading={running} disabled={!canGenerate || running} onClick={() => void generate()}>
                                 开始生成
                             </Button>

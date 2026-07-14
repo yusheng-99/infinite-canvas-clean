@@ -58,10 +58,10 @@ export default function CanvasPage() {
 
     return (
         <main className="app-page">
-            <div className="app-page-container flex flex-col gap-8">
+            <div className="app-page-container flex flex-col gap-6">
                 <header className="flex flex-wrap items-end justify-between gap-5 py-2">
                     <div>
-                        <p className="page-eyebrow">Canvas library</p>
+                        <p className="page-eyebrow">画布项目</p>
                         <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">无限画布</h1>
                         <p className="mt-3 text-sm text-muted-foreground">{projects.length ? `${projects.length} 个本地项目，继续你的创作。` : "从一个空白画布开始创作。"}</p>
                     </div>
@@ -93,7 +93,7 @@ export default function CanvasPage() {
                 {!hydrated ? (
                     <section className="workspace-panel flex min-h-[360px] items-center justify-center text-sm text-muted-foreground">正在加载画布...</section>
                 ) : projects.length ? (
-                    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         {projects.map((project) => (
                             <CanvasProjectCard key={project.id} project={project} />
                         ))}
@@ -101,7 +101,7 @@ export default function CanvasPage() {
                 ) : (
                     <section className="workspace-panel flex min-h-[420px] flex-col items-center justify-center text-center">
                         <h2 className="text-xl font-medium">还没有画布</h2>
-                        <p className="mt-3 text-sm text-stone-500">新建一个画布后，就可以独立保存节点、连线和画布外观。</p>
+                        <p className="mt-3 text-sm text-muted-foreground">新建一个画布后，就可以独立保存节点、连线和画布外观。</p>
                         <Button type="primary" className="mt-6" icon={<Plus className="size-4" />} onClick={createAndEnter}>
                             新建画布
                         </Button>
