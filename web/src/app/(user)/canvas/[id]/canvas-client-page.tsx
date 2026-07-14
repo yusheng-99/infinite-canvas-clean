@@ -1196,6 +1196,8 @@ function InfiniteCanvasPage() {
             setContextMenu(null);
             if (pendingConnectionCreateRef.current) cancelPendingConnectionCreate();
             if (event.button !== 0) return;
+            setDialogNodeId(null);
+            setEditingNodeId(null);
 
             const world = screenToCanvas(event.clientX, event.clientY);
             const nextSelectionBox = {
