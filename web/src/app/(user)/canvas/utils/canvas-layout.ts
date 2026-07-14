@@ -168,30 +168,33 @@ function layoutSize(node: CanvasNodeData, batchLayouts: Map<string, BatchLayout>
     return batchLayouts.get(node.id) || node;
 }
 
-function compactAxis(nodes: CanvasNodeData[], batchLayouts: Map<string, BatchLayout>, positions: Map<string, Position>, axis: "x" | "y", gap: number) {
-    const sizeKey = axis === "x" ? "width" : "height";
-    const bands: { start: number; end: number; nodes: CanvasNodeData[] }[] = [];
+function compactMixedLayout(nodes: CanvasNodeData[], batchLayouts: Map<string, BatchLayout>, positions: Map<string, Position>) {
+    const columns: { anchor: number; nodes: CanvasNodeData[] }[] = [];
     [...nodes]
-        .sort((a, b) => positions.get(a.id)![axis] - positions.get(b.id)![axis])
+        .sort((a, b) => positions.get(a.id)!.x - positions.get(b.id)!.x)
         .forEach((node) => {
-            const start = positions.get(node.id)![axis];
-            const end = start + layoutSize(node, batchLayouts)[sizeKey];
-            const band = bands.at(-1);
-            if (band && start < band.end) {
-                band.end = Math.max(band.end, end);
-                band.nodes.push(node);
-            } else {
-                bands.push({ start, end, nodes: [node] });
-            }
+            const x = positions.get(node.id)!.x;
+            const column = columns.at(-1);
+            if (column && x - column.anchor <= VERTICAL_GAP) column.nodes.push(node);
+            else columns.push({ anchor: x, nodes: [node] });
         });
-    let cursor = bands[0]?.start || 0;
-    bands.forEach((band) => {
-        band.nodes.forEach((node) => {
-            const position = positions.get(node.id)!;
-            positions.set(node.id, axis === "x" ? { ...position, x: cursor } : { ...position, y: cursor });
+    const top = Math.min(...nodes.map((node) => positions.get(node.id)!.y));
+    let x = columns[0]?.anchor || 0;
+    let right = x;
+    let bottom = top;
+    columns.forEach((column) => {
+        const width = Math.max(...column.nodes.map((node) => layoutSize(node, batchLayouts).width));
+        let y = top;
+        column.nodes.sort((a, b) => positions.get(a.id)!.y - positions.get(b.id)!.y).forEach((node) => {
+            const size = layoutSize(node, batchLayouts);
+            positions.set(node.id, { x, y });
+            right = Math.max(right, x + size.width);
+            bottom = Math.max(bottom, y + size.height);
+            y += size.height + VERTICAL_GAP;
         });
-        cursor += Math.max(...band.nodes.map((node) => layoutSize(node, batchLayouts)[sizeKey])) + gap;
+        x += width + VERTICAL_GAP;
     });
+    return { right, bottom };
 }
 
 function graphComponents(nodes: CanvasNodeData[], edges: GraphEdge[]) {
@@ -262,12 +265,7 @@ function layoutGraphComponent(nodes: CanvasNodeData[], edges: GraphEdge[], batch
             const position = { x: Math.round(node.position.x / GRID_SIZE) * GRID_SIZE, y: Math.round(node.position.y / GRID_SIZE) * GRID_SIZE };
             positions.set(node.id, position);
         });
-        compactAxis(nodes, batchLayouts, positions, "x", VERTICAL_GAP);
-        compactAxis(nodes, batchLayouts, positions, "y", VERTICAL_GAP);
-        return {
-            right: Math.max(...nodes.map((node) => positions.get(node.id)!.x + layoutSize(node, batchLayouts).width)),
-            bottom: Math.max(...nodes.map((node) => positions.get(node.id)!.y + layoutSize(node, batchLayouts).height)),
-        };
+        return compactMixedLayout(nodes, batchLayouts, positions);
     }
     const horizontal = horizontalScore >= verticalScore;
     const direction = (horizontal ? horizontalDirection : verticalDirection) < 0 ? -1 : 1;
