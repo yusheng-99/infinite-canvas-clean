@@ -6,24 +6,26 @@ import { Eye, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { formatBytes } from "@/lib/image-utils";
-import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset, type NodeGroupAsset } from "@/stores/use-asset-store";
 
 export type InsertAssetPayload =
     | { kind: "text"; content: string; title: string }
     | { kind: "image"; dataUrl: string; title: string; storageKey?: string; prompt?: string }
-    | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number; prompt?: string };
+    | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number; prompt?: string }
+    | { kind: "node-group"; title: string; nodes: NodeGroupAsset["data"]["nodes"]; connections: NodeGroupAsset["data"]["connections"] };
 
 type Props = {
     open: boolean;
     defaultTab?: string;
+    allowNodeGroups?: boolean;
     onInsert: (payload: InsertAssetPayload) => void;
     onClose: () => void;
 };
 
-export function AssetPickerModal({ open, onInsert, onClose }: Props) {
+export function AssetPickerModal({ open, allowNodeGroups = false, onInsert, onClose }: Props) {
     return (
         <Modal title="选择素材" open={open} onCancel={onClose} footer={null} width={860} destroyOnHidden styles={{ body: { padding: "0 24px 24px", minHeight: 480 } }}>
-            <MyAssetsTab onInsert={onInsert} />
+            <MyAssetsTab allowNodeGroups={allowNodeGroups} onInsert={onInsert} />
         </Modal>
     );
 }
@@ -35,10 +37,12 @@ const kindOptions = [
     { label: "文本", value: "text" },
     { label: "图片", value: "image" },
     { label: "视频", value: "video" },
+    { label: "节点组", value: "node-group" },
 ];
 
 function PickerCard({ asset, onOpen, onInsert, onRename, onDelete }: { asset: Asset; onOpen: () => void; onInsert: () => void; onRename: () => void; onDelete: () => void }) {
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
+    const groupSummary = asset.kind === "node-group" ? `${asset.data.nodes.length} 个节点 · ${asset.data.connections.length} 条连线` : "";
     return (
         <div
             role="button"
@@ -54,12 +58,12 @@ function PickerCard({ asset, onOpen, onInsert, onRename, onDelete }: { asset: As
             {cover ? (
                 <img src={cover} alt={asset.title} className="h-44 w-full shrink-0 object-cover" />
             ) : (
-                <div className="line-clamp-7 h-44 shrink-0 overflow-hidden bg-stone-100 p-3 text-xs leading-5 text-stone-500 dark:bg-stone-800 dark:text-stone-400">{asset.kind === "text" ? asset.data.content : asset.title}</div>
+                <div className="line-clamp-7 h-44 shrink-0 overflow-hidden bg-stone-100 p-3 text-xs leading-5 text-stone-500 dark:bg-stone-800 dark:text-stone-400">{asset.kind === "text" ? asset.data.content : groupSummary || asset.title}</div>
             )}
             <div className="mt-auto p-2.5">
                 <div className="flex items-center justify-between gap-2">
                     <span className="line-clamp-1 text-xs font-medium text-stone-800 dark:text-stone-200">{asset.title}</span>
-                    <Tag className="m-0 shrink-0 text-[10px]">{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>
+                    <Tag className="m-0 shrink-0 text-[10px]">{assetKindLabel(asset)}</Tag>
                 </div>
             </div>
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-stone-950/0 text-sm font-medium text-white opacity-0 transition group-hover:bg-stone-950/55 group-hover:opacity-100">
@@ -104,7 +108,7 @@ function PickerCard({ asset, onOpen, onInsert, onRename, onDelete }: { asset: As
     );
 }
 
-function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => void }) {
+function MyAssetsTab({ allowNodeGroups, onInsert }: { allowNodeGroups: boolean; onInsert: (payload: InsertAssetPayload) => void }) {
     const assets = useAssetStore((state) => state.assets);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const removeAsset = useAssetStore((state) => state.removeAsset);
@@ -118,10 +122,10 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     const filtered = useMemo(() => {
         const query = keyword.trim().toLowerCase();
         return assets
-            .filter((a) => a.kind === "text" || a.kind === "image" || a.kind === "video")
+            .filter((a) => a.kind === "text" || a.kind === "image" || a.kind === "video" || (allowNodeGroups && a.kind === "node-group"))
             .filter((a) => kindFilter === "all" || a.kind === kindFilter)
             .filter((a) => !query || assetSearchText(a).includes(query));
-    }, [assets, keyword, kindFilter]);
+    }, [allowNodeGroups, assets, keyword, kindFilter]);
 
     const visible = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
 
@@ -131,7 +135,9 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     }, [filtered.length]);
 
     const handleInsert = (asset: Asset) => {
-        if (asset.kind === "text") {
+        if (asset.kind === "node-group") {
+            onInsert({ kind: "node-group", title: asset.title, nodes: asset.data.nodes, connections: asset.data.connections });
+        } else if (asset.kind === "text") {
             onInsert({ kind: "text", content: asset.data.content, title: asset.title });
         } else {
             const prompt = getAssetPrompt(asset);
@@ -178,7 +184,7 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                     }}
                 />
                 <div className="flex gap-1.5">
-                    {kindOptions.map((opt) => (
+                    {kindOptions.filter((opt) => allowNodeGroups || opt.value !== "node-group").map((opt) => (
                         <Tag.CheckableTag
                             key={opt.value}
                             checked={kindFilter === opt.value}
@@ -229,7 +235,9 @@ function AssetPreviewModal({ asset, onClose, onInsert, onRename, onEditText, onD
                         ) : cover ? (
                             <img src={cover} alt={asset.title} className="max-h-[56vh] w-full rounded-lg object-contain bg-stone-950" />
                         ) : (
-                            <div className="max-h-[56vh] overflow-auto rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-700 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无预览"}</div>
+                            <div className="max-h-[56vh] overflow-auto rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-700 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">
+                                {asset.kind === "text" ? asset.data.content : asset.kind === "node-group" ? `包含 ${asset.data.nodes.length} 个节点，${asset.data.connections.length} 条连线` : "暂无预览"}
+                            </div>
                         )}
                         {prompt ? (
                             <div className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
@@ -246,7 +254,7 @@ function AssetPreviewModal({ asset, onClose, onInsert, onRename, onEditText, onD
                                 {asset.title}
                             </Typography.Title>
                             <Space size={[4, 4]} wrap>
-                                <Tag>{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>
+                                <Tag>{assetKindLabel(asset)}</Tag>
                                 {(asset.tags || []).map((tag) => (
                                     <Tag key={tag}>{tag}</Tag>
                                 ))}
@@ -257,6 +265,7 @@ function AssetPreviewModal({ asset, onClose, onInsert, onRename, onEditText, onD
                             {asset.kind === "image" || asset.kind === "video" ? <div>尺寸：{asset.data.width}x{asset.data.height}</div> : null}
                             {asset.kind === "image" || asset.kind === "video" ? <div>大小：{formatBytes(asset.data.bytes)}</div> : null}
                             {asset.kind === "image" || asset.kind === "video" ? <div>类型：{asset.data.mimeType}</div> : null}
+                            {asset.kind === "node-group" ? <div>内容：{asset.data.nodes.length} 个节点，{asset.data.connections.length} 条连线</div> : null}
                         </div>
                         {asset.note ? <Typography.Paragraph className="whitespace-pre-wrap text-sm text-stone-600 dark:text-stone-300">{asset.note}</Typography.Paragraph> : null}
                         <Space wrap>
@@ -351,7 +360,12 @@ function getAssetPrompt(asset: Asset) {
 }
 
 function assetSearchText(asset: Asset) {
-    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), getAssetPrompt(asset), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+    const content = asset.kind === "text" ? asset.data.content : asset.kind === "node-group" ? `${asset.data.nodes.length} 个节点 ${asset.data.connections.length} 条连线 节点组` : asset.data.mimeType;
+    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), getAssetPrompt(asset), content].join(" ").toLowerCase();
+}
+
+function assetKindLabel(asset: Asset) {
+    return asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "node-group" ? "节点组" : "文本";
 }
 
 function stringValue(value: unknown) {

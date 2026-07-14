@@ -29,6 +29,7 @@ const kindOptions = [
     { label: "文本", value: "text" },
     { label: "图片", value: "image" },
     { label: "视频", value: "video" },
+    { label: "节点组", value: "node-group" },
 ];
 
 export default function AssetsPage() {
@@ -57,7 +58,7 @@ export default function AssetsPage() {
     const title = Form.useWatch("title", form) || "";
     const tags = Form.useWatch("tags", form) || [];
     const content = Form.useWatch("content", form) || "";
-    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video"), [assets]);
+    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "node-group"), [assets]);
 
     const filteredAssets = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -204,7 +205,7 @@ export default function AssetsPage() {
                     <div className="mx-auto max-w-5xl text-center">
                         <p className="page-eyebrow mb-3">Asset library</p>
                         <h1 className="text-4xl font-semibold tracking-tight text-foreground">我的素材</h1>
-                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本和图片，按类型、标题和标签快速查找。</p>
+                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">收藏常用文本、图片、视频和节点组，按类型、标题和标签快速查找。</p>
                     </div>
 
                     <div className="mx-auto mt-8 w-full max-w-3xl">
@@ -430,7 +431,7 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
                         <img src={cover} alt={asset.title} className="size-full object-cover" />
                     ) : (
                         <div className="flex size-full items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">
-                            <span className="line-clamp-7">{asset.kind === "text" ? asset.data.content : "暂无封面"}</span>
+                            <span className="line-clamp-7">{asset.kind === "text" ? asset.data.content : asset.kind === "node-group" ? summary : "暂无封面"}</span>
                         </div>
                     )}
                 </button>
@@ -445,7 +446,7 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
                                 {asset.source || "未标注来源"}
                             </Typography.Text>
                         </div>
-                        <Tag className="m-0 shrink-0 text-[11px]">{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>
+                        <Tag className="m-0 shrink-0 text-[11px]">{assetKindLabel(asset)}</Tag>
                     </div>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} className="!mb-0 !mt-2 !text-xs !leading-5">
                         {summary}
@@ -467,7 +468,7 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
                 <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onRename}>
                     重命名
                 </Button>
-                {asset.kind !== "video" ? (
+                {asset.kind === "text" || asset.kind === "image" ? (
                     <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>
                         编辑
                     </Button>
@@ -499,14 +500,14 @@ function AssetDrawer({ asset, onClose, onRename, onEdit, onCopy, onDownload }: {
                     {cover ? (
                         <Image src={cover} alt={asset.title} className="rounded-lg" />
                     ) : (
-                        <div className="rounded-lg border border-stone-200 bg-stone-50 p-5 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>
+                        <div className="rounded-lg border border-stone-200 bg-stone-50 p-5 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : asset.kind === "node-group" ? assetSummary(asset) : "暂无封面"}</div>
                     )}
                     <div>
                         <Typography.Title level={4} className="!mb-2">
                             {asset.title}
                         </Typography.Title>
                         <Space size={[4, 4]} wrap>
-                            <Tag>{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>
+                            <Tag>{assetKindLabel(asset)}</Tag>
                             {(asset.tags || []).map((tag) => (
                                 <Tag key={tag}>{tag}</Tag>
                             ))}
@@ -520,6 +521,8 @@ function AssetDrawer({ asset, onClose, onRename, onEdit, onCopy, onDownload }: {
                             <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{asset.data.content}</Typography.Paragraph>
                         ) : asset.kind === "video" ? (
                             <video src={asset.data.url} controls className="mt-2 aspect-video w-full rounded-lg bg-black" />
+                        ) : asset.kind === "node-group" ? (
+                            <Typography.Text className="mt-2 block">{assetSummary(asset)}</Typography.Text>
                         ) : (
                             <Typography.Text className="mt-2 block">
                                 {asset.data.width}x{asset.data.height} · {formatBytes(asset.data.bytes)} · {asset.data.mimeType}
@@ -604,11 +607,17 @@ function RenameAssetModal({ asset, onClose, onRename }: { asset: Asset | null; o
 
 function assetSummary(asset: Asset) {
     if (asset.kind === "text") return asset.data.content;
+    if (asset.kind === "node-group") return `${asset.data.nodes.length} 个节点 · ${asset.data.connections.length} 条连线`;
     return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
 }
 
 function assetSearchText(asset: Asset) {
-    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), getAssetPrompt(asset), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+    const content = asset.kind === "text" ? asset.data.content : asset.kind === "node-group" ? asset.data.nodes.map((node) => [node.title, node.metadata?.content, node.metadata?.composerContent, node.metadata?.prompt].filter(Boolean).join(" ")).join(" ") : asset.data.mimeType;
+    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), getAssetPrompt(asset), content].join(" ").toLowerCase();
+}
+
+function assetKindLabel(asset: Asset) {
+    return asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "node-group" ? "节点组" : "文本";
 }
 
 function getAssetPrompt(asset: Asset) {

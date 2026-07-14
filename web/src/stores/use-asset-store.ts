@@ -8,12 +8,14 @@ import { nanoid } from "nanoid";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { cleanupUnusedImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { cleanupUnusedMedia, resolveMediaUrl } from "@/services/file-storage";
+import { CanvasNodeType, type CanvasNodeGroupData } from "@/app/(user)/canvas/types";
 
-export type AssetKind = "text" | "image" | "video";
+export type AssetKind = "text" | "image" | "video" | "node-group";
 export type TextAsset = AssetBase<"text"> & { data: { content: string } };
 export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
-export type Asset = TextAsset | ImageAsset | VideoAsset;
+export type NodeGroupAsset = AssetBase<"node-group"> & { data: CanvasNodeGroupData };
+export type Asset = TextAsset | ImageAsset | VideoAsset | NodeGroupAsset;
 
 type AssetBase<T extends AssetKind> = {
     id: string;
@@ -49,6 +51,22 @@ const assetStorage: PersistStorage<AssetStore> = {
         parsed.state.assets = await Promise.all(
             parsed.state.assets.map(async (asset) => {
                 if (asset.kind === "video" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
+                if (asset.kind === "node-group")
+                    return {
+                        ...asset,
+                        data: {
+                            ...asset.data,
+                            nodes: await Promise.all(
+                                asset.data.nodes.map(async (node) => {
+                                    const storageKey = node.metadata?.storageKey;
+                                    if (!storageKey) return node;
+                                    if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) return node;
+                                    const content = await (node.type === CanvasNodeType.Image ? resolveImageUrl(storageKey, node.metadata?.content) : resolveMediaUrl(storageKey, node.metadata?.content));
+                                    return { ...node, metadata: { ...node.metadata, content } };
+                                }),
+                            ),
+                        },
+                    };
                 if (asset.kind !== "image") return asset;
                 if (asset.data.storageKey)
                     return {

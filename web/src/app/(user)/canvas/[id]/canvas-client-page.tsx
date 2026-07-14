@@ -43,11 +43,13 @@ import { AssetPickerModal, type InsertAssetPayload } from "../components/asset-p
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
+import { createCanvasNodeGroup, instantiateCanvasNodeGroup } from "../utils/canvas-node-group";
 import {
     CanvasNodeType,
     type CanvasConnection,
     type CanvasImageGenerationType,
     type CanvasNodeData,
+    type CanvasNodeGroupData,
     type CanvasNodeMetadata,
     type ConnectionHandle,
     type ContextMenuState,
@@ -57,11 +59,6 @@ import {
 } from "../types";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/media";
-
-type CanvasClipboard = {
-    nodes: CanvasNodeData[];
-    connections: CanvasConnection[];
-};
 
 type PendingConnectionCreate = {
     connection: ConnectionHandle;
@@ -73,7 +70,7 @@ type ConnectionDropTarget = {
     isNearNode: boolean;
 };
 
-type CanvasHistoryEntry = Pick<CanvasClipboard, "nodes" | "connections"> & {
+type CanvasHistoryEntry = Pick<CanvasNodeGroupData, "nodes" | "connections"> & {
     backgroundMode: CanvasBackgroundMode;
     showImageInfo: boolean;
 };
@@ -336,7 +333,7 @@ function InfiniteCanvasPage() {
     const containerRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const uploadTargetRef = useRef<{ nodeId?: string; position?: Position } | null>(null);
-    const clipboardRef = useRef<CanvasClipboard | null>(null);
+    const clipboardRef = useRef<CanvasNodeGroupData | null>(null);
     const historyRef = useRef<{ past: CanvasHistoryEntry[]; future: CanvasHistoryEntry[] }>({ past: [], future: [] });
     const lastHistoryRef = useRef<CanvasHistoryEntry | null>(null);
     const historyCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1087,79 +1084,37 @@ function InfiniteCanvasPage() {
     }, []);
 
     const copySelectedNodes = useCallback(() => {
-        const selectedIds = selectedNodeIdsRef.current;
-        if (!selectedIds.size) return;
-
-        const copiedNodes = nodesRef.current
-            .filter((node) => selectedIds.has(node.id))
-            .map((node) => ({
-                ...node,
-                position: { ...node.position },
-                metadata: node.metadata ? { ...node.metadata } : undefined,
-            }));
-
-        if (!copiedNodes.length) return;
-
-        clipboardRef.current = {
-            nodes: copiedNodes,
-            connections: connectionsRef.current.filter((connection) => selectedIds.has(connection.fromNodeId) && selectedIds.has(connection.toNodeId)).map((connection) => ({ ...connection })),
-        };
+        const group = createCanvasNodeGroup(nodesRef.current, connectionsRef.current, selectedNodeIdsRef.current);
+        if (group.nodes.length) clipboardRef.current = group;
     }, []);
 
     const pasteCopiedNodes = useCallback(() => {
         const clipboard = clipboardRef.current;
         if (!clipboard?.nodes.length) return false;
-
-        const center = getCanvasCenter();
-        const bounds = clipboard.nodes.reduce(
-            (acc, node) => ({
-                left: Math.min(acc.left, node.position.x),
-                top: Math.min(acc.top, node.position.y),
-                right: Math.max(acc.right, node.position.x + node.width),
-                bottom: Math.max(acc.bottom, node.position.y + node.height),
-            }),
-            { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
-        );
-        const dx = center.x - (bounds.left + bounds.right) / 2;
-        const dy = center.y - (bounds.top + bounds.bottom) / 2;
-        const idMap = new Map<string, string>();
-        const nextNodes = clipboard.nodes.map((node, index) => {
-            const id = `${node.type}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`;
-            idMap.set(node.id, id);
-            return {
-                ...node,
-                id,
-                title: node.title.endsWith(" Copy") ? node.title : `${node.title} Copy`,
-                position: {
-                    x: node.position.x + dx,
-                    y: node.position.y + dy,
-                },
-                metadata: node.metadata ? { ...node.metadata } : undefined,
-            };
-        });
-
-        const nextConnections = clipboard.connections.flatMap((connection, index) => {
-            const fromNodeId = idMap.get(connection.fromNodeId);
-            const toNodeId = idMap.get(connection.toNodeId);
-            if (!fromNodeId || !toNodeId) return [];
-            return [
-                {
-                    ...connection,
-                    id: `conn-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
-                    fromNodeId,
-                    toNodeId,
-                },
-            ];
-        });
-
-        setNodes((prev) => [...prev, ...nextNodes]);
-        setConnections((prev) => [...prev, ...nextConnections]);
-        setSelectedNodeIds(new Set(nextNodes.map((node) => node.id)));
+        const next = instantiateCanvasNodeGroup(clipboard, getCanvasCenter(), true);
+        setNodes((prev) => [...prev, ...next.nodes]);
+        setConnections((prev) => [...prev, ...next.connections]);
+        setSelectedNodeIds(new Set(next.nodes.map((node) => node.id)));
         setSelectedConnectionId(null);
         setContextMenu(null);
-        setDialogNodeId(nextNodes[0]?.id || null);
+        setDialogNodeId(next.nodes[0]?.id || null);
         return true;
     }, [getCanvasCenter]);
+
+    const saveSelectedNodeGroup = useCallback(() => {
+        const group = createCanvasNodeGroup(nodesRef.current, connectionsRef.current, selectedNodeIdsRef.current);
+        if (!group.nodes.length) return message.warning("请先选择要保存的节点");
+        addAsset({
+            kind: "node-group",
+            title: `${currentProject?.title || "画布"} · ${group.nodes.length} 个节点`,
+            coverUrl: "",
+            tags: [],
+            source: "Canvas",
+            data: group,
+            metadata: { source: "canvas", projectId },
+        });
+        message.success("节点组已加入我的素材");
+    }, [addAsset, currentProject?.title, message, projectId]);
 
     const resetViewport = useCallback(() => {
         markViewportInteracting();
@@ -2794,9 +2749,16 @@ function InfiniteCanvasPage() {
     );
 
     const handleAssetInsert = useCallback(
-        (payload: InsertAssetPayload) => {
+        async (payload: InsertAssetPayload) => {
             if (payload.kind === "text") {
                 insertTextNode(payload.content);
+            } else if (payload.kind === "node-group") {
+                const next = instantiateCanvasNodeGroup({ nodes: await hydrateCanvasImages(payload.nodes), connections: payload.connections }, getCanvasCenter());
+                setNodes((prev) => [...prev, ...next.nodes]);
+                setConnections((prev) => [...prev, ...next.connections]);
+                setSelectedNodeIds(new Set(next.nodes.map((node) => node.id)));
+                setSelectedConnectionId(null);
+                setDialogNodeId(next.nodes[0]?.id || null);
             } else if (payload.kind === "video") {
                 const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
                 const center = screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
@@ -2809,7 +2771,7 @@ function InfiniteCanvasPage() {
             }
             setAssetPickerOpen(false);
         },
-        [insertAssetImage, insertTextNode, screenToCanvas, size.height, size.width],
+        [getCanvasCenter, insertAssetImage, insertTextNode, screenToCanvas, size.height, size.width],
     );
 
     if (!projectLoaded) return <CanvasRefreshShell />;
@@ -3028,6 +2990,7 @@ function InfiniteCanvasPage() {
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
                     onUpload={() => handleUploadRequest()}
+                    onSaveNodeGroup={saveSelectedNodeGroup}
                     onDelete={() => deleteNodes(new Set(selectedNodeIds))}
                     onClear={() => setClearConfirmOpen(true)}
                     onDeselect={deselectCanvas}
@@ -3106,7 +3069,7 @@ function InfiniteCanvasPage() {
                     <p className="text-sm opacity-60">这会删除当前画布上的所有节点和连线。</p>
                 </Modal>
 
-                <AssetPickerModal open={assetPickerOpen} onInsert={handleAssetInsert} onClose={() => setAssetPickerOpen(false)} />
+                <AssetPickerModal open={assetPickerOpen} allowNodeGroups onInsert={handleAssetInsert} onClose={() => setAssetPickerOpen(false)} />
             </section>
         </main>
     );

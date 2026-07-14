@@ -1,8 +1,8 @@
 import { saveAs } from "file-saver";
 
 import { createZip, readZip } from "@/lib/zip";
-import { getMediaBlob, setMediaBlob } from "@/services/file-storage";
-import { getImageBlob, setImageBlob } from "@/services/image-storage";
+import { collectMediaStorageKeys, getMediaBlob, setMediaBlob } from "@/services/file-storage";
+import { collectImageStorageKeys, getImageBlob, setImageBlob } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
 
 type AssetExportFile = {
@@ -25,14 +25,13 @@ export async function exportAssets(assets: Asset[]) {
     const zipFiles: { name: string; data: BlobPart }[] = [];
 
     await Promise.all(
-        assets.map(async (asset) => {
-            if (asset.kind !== "image" && asset.kind !== "video") return;
-            const storageKey = asset.data.storageKey;
-            if (!storageKey) return;
-            const blob = asset.kind === "image" ? await getImageBlob(storageKey) : await getMediaBlob(storageKey);
+        [...new Set([...collectImageStorageKeys(assets), ...collectMediaStorageKeys(assets)])].map(async (storageKey) => {
+            const isImage = storageKey.startsWith("image:");
+            const blob = isImage ? await getImageBlob(storageKey) : await getMediaBlob(storageKey);
             if (!blob) return;
-            const path = `files/${safeFileName(storageKey)}.${fileExtension(blob.type, asset.kind)}`;
-            files.push({ storageKey, path, mimeType: blob.type || asset.data.mimeType, bytes: blob.size });
+            const mimeType = blob.type || "application/octet-stream";
+            const path = `files/${safeFileName(storageKey)}.${fileExtension(mimeType, isImage)}`;
+            files.push({ storageKey, path, mimeType, bytes: blob.size });
             zipFiles.push({ name: path, data: blob });
         }),
     );
@@ -62,12 +61,12 @@ function safeFileName(value: string) {
     return value.replace(/[\\/:*?"<>|]/g, "_");
 }
 
-function fileExtension(mimeType: string, kind: Asset["kind"]) {
+function fileExtension(mimeType: string, isImage: boolean) {
     if (mimeType.includes("png")) return "png";
     if (mimeType.includes("jpeg")) return "jpg";
     if (mimeType.includes("webp")) return "webp";
     if (mimeType.includes("gif")) return "gif";
     if (mimeType.includes("mp4")) return "mp4";
     if (mimeType.includes("webm")) return "webm";
-    return kind === "image" ? "png" : "bin";
+    return isImage ? "png" : "bin";
 }

@@ -78,6 +78,11 @@ export type CanvasConnection = {
     toNodeId: string;
 };
 
+export type CanvasNodeGroupData = {
+    nodes: CanvasNodeData[];
+    connections: CanvasConnection[];
+};
+
 export type ConnectionHandle = {
     nodeId: string;
     handleType: "source" | "target";
