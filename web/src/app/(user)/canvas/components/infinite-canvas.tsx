@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -13,13 +13,12 @@ type InfiniteCanvasProps = {
     onViewportChange: (viewport: ViewportTransform) => void;
     onViewportInteraction?: () => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
-    onCanvasDeselect?: () => void;
     onContextMenu?: (event: React.MouseEvent) => void;
     onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
     children: React.ReactNode;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onViewportInteraction, onCanvasMouseDown, onCanvasDeselect, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onViewportInteraction, onCanvasMouseDown, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const contentRef = useRef<HTMLDivElement>(null);
     const gridRef = useRef<HTMLDivElement>(null);
@@ -36,7 +35,6 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     const frameRef = useRef<number | null>(null);
     const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const nextViewportRef = useRef<ViewportTransform | null>(null);
-    const [isSpacePressed, setIsSpacePressed] = useState(false);
 
     useEffect(() => {
         viewportRef.current = viewport;
@@ -74,25 +72,6 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         commitTimerRef.current = setTimeout(commitViewport, 120);
     }, [backgroundMode, commitViewport, onViewportInteraction, theme]);
 
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.code !== "Space") return;
-            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-            setIsSpacePressed(true);
-        };
-
-        const handleKeyUp = (event: KeyboardEvent) => {
-            if (event.code === "Space") setIsSpacePressed(false);
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        window.addEventListener("keyup", handleKeyUp);
-        return () => {
-            window.removeEventListener("keydown", handleKeyDown);
-            window.removeEventListener("keyup", handleKeyUp);
-        };
-    }, []);
-
     const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
         const target = event.target instanceof Element ? event.target : null;
         if (target?.closest("[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown")) return;
@@ -122,14 +101,14 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         if (target?.closest("[data-connection-create-menu]")) return;
         const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
 
-        if (event.button === 0 && (event.ctrlKey || event.metaKey) && isBackgroundClick) {
+        if (event.button === 0 && isBackgroundClick) {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
             onCanvasMouseDown?.(event);
             return;
         }
 
-        if (event.button === 1 || (event.button === 0 && !isSpacePressed && isBackgroundClick)) {
+        if (event.button === 1) {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
             const currentViewport = viewportRef.current;
@@ -145,9 +124,6 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             return;
         }
 
-        if (event.button === 0 && isSpacePressed && isBackgroundClick) {
-            event.preventDefault();
-        }
     };
 
     useEffect(() => {
@@ -170,11 +146,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         const handlePointerUp = () => {
             if (!panState.current.isPanning) return;
 
-            if (!panState.current.hasMoved) {
-                onCanvasDeselect?.();
-            } else {
-                commitViewport();
-            }
+            if (panState.current.hasMoved) commitViewport();
             panState.current.isPanning = false;
             document.body.style.cursor = "default";
         };
@@ -185,7 +157,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             window.removeEventListener("pointermove", handlePointerMove);
             window.removeEventListener("pointerup", handlePointerUp);
         };
-    }, [commitViewport, onCanvasDeselect, scheduleViewportChange]);
+    }, [commitViewport, scheduleViewportChange]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -199,7 +171,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
     return (
         <div
             ref={containerRef}
-            className="relative h-full w-full cursor-grab select-none overflow-hidden"
+            className="relative h-full w-full cursor-default select-none overflow-hidden"
             style={{ background: theme.canvas.background }}
             onPointerDown={handlePointerDown}
             onWheel={handleWheel}
