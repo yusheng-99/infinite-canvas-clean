@@ -168,6 +168,33 @@ function layoutSize(node: CanvasNodeData, batchLayouts: Map<string, BatchLayout>
     return batchLayouts.get(node.id) || node;
 }
 
+function compactAxis(nodes: CanvasNodeData[], batchLayouts: Map<string, BatchLayout>, positions: Map<string, Position>, axis: "x" | "y", gap: number) {
+    const sizeKey = axis === "x" ? "width" : "height";
+    const bands: { start: number; end: number; nodes: CanvasNodeData[] }[] = [];
+    [...nodes]
+        .sort((a, b) => positions.get(a.id)![axis] - positions.get(b.id)![axis])
+        .forEach((node) => {
+            const start = positions.get(node.id)![axis];
+            const end = start + layoutSize(node, batchLayouts)[sizeKey];
+            const band = bands.at(-1);
+            if (band && start < band.end) {
+                band.end = Math.max(band.end, end);
+                band.nodes.push(node);
+            } else {
+                bands.push({ start, end, nodes: [node] });
+            }
+        });
+    let cursor = bands[0]?.start || 0;
+    bands.forEach((band) => {
+        const offset = cursor - band.start;
+        band.nodes.forEach((node) => {
+            const position = positions.get(node.id)!;
+            positions.set(node.id, axis === "x" ? { ...position, x: position.x + offset } : { ...position, y: position.y + offset });
+        });
+        cursor = band.end + offset + gap;
+    });
+}
+
 function graphComponents(nodes: CanvasNodeData[], edges: GraphEdge[]) {
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const neighbors = new Map(nodes.map((node) => [node.id, new Set<string>()]));
@@ -232,16 +259,16 @@ function layoutGraphComponent(nodes: CanvasNodeData[], edges: GraphEdge[], batch
         else hasVerticalEdge = true;
     });
     if (hasHorizontalEdge && hasVerticalEdge) {
-        let right = Number.NEGATIVE_INFINITY;
-        let bottom = Number.NEGATIVE_INFINITY;
         nodes.forEach((node) => {
             const position = { x: Math.round(node.position.x / GRID_SIZE) * GRID_SIZE, y: Math.round(node.position.y / GRID_SIZE) * GRID_SIZE };
-            const size = layoutSize(node, batchLayouts);
             positions.set(node.id, position);
-            right = Math.max(right, position.x + size.width);
-            bottom = Math.max(bottom, position.y + size.height);
         });
-        return { right, bottom };
+        compactAxis(nodes, batchLayouts, positions, "x", VERTICAL_GAP);
+        compactAxis(nodes, batchLayouts, positions, "y", VERTICAL_GAP);
+        return {
+            right: Math.max(...nodes.map((node) => positions.get(node.id)!.x + layoutSize(node, batchLayouts).width)),
+            bottom: Math.max(...nodes.map((node) => positions.get(node.id)!.y + layoutSize(node, batchLayouts).height)),
+        };
     }
     const horizontal = horizontalScore >= verticalScore;
     const direction = (horizontal ? horizontalDirection : verticalDirection) < 0 ? -1 : 1;
