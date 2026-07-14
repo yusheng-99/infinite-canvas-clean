@@ -44,6 +44,7 @@ import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
 import { createCanvasNodeGroup, instantiateCanvasNodeGroup } from "../utils/canvas-node-group";
+import { alignCanvasNodes, autoArrangeCanvasNodes, snapCanvasDrag, type CanvasAlignmentGuides, type CanvasLayoutAction } from "../utils/canvas-layout";
 import {
     CanvasNodeType,
     type CanvasConnection,
@@ -351,12 +352,16 @@ function InfiniteCanvasPage() {
         hasMoved: boolean;
         startX: number;
         startY: number;
+        lastDx: number;
+        lastDy: number;
         initialSelectedNodes: { id: string; x: number; y: number }[];
     }>({
         isDraggingNode: false,
         hasMoved: false,
         startX: 0,
         startY: 0,
+        lastDx: 0,
+        lastDy: 0,
         initialSelectedNodes: [],
     });
 
@@ -414,6 +419,7 @@ function InfiniteCanvasPage() {
     const [collapsingBatchIds, setCollapsingBatchIds] = useState<Set<string>>(new Set());
     const [openingBatchIds, setOpeningBatchIds] = useState<Set<string>>(new Set());
     const [isNodeDragging, setIsNodeDragging] = useState(false);
+    const [alignmentGuides, setAlignmentGuides] = useState<CanvasAlignmentGuides>({});
 
     const nodesRef = useRef(nodes);
     const connectionsRef = useRef(connections);
@@ -892,6 +898,7 @@ function InfiniteCanvasPage() {
         [hiddenBatchNodeIds, nodes, viewportBounds],
     );
     const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
+    const layoutNodeCount = nodes.length - hiddenBatchNodeIds.size;
     const toolbarNode = toolbarNodeId ? nodeById.get(toolbarNodeId) || null : null;
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
@@ -923,6 +930,25 @@ function InfiniteCanvasPage() {
         });
         return map;
     }, [nodeById, nodes]);
+
+    const autoLayoutCanvas = useCallback(
+        (scope: "selected" | "all") => {
+            const current = nodesRef.current;
+            const targetIds = scope === "selected" ? new Set([...selectedNodeIdsRef.current].filter((id) => !hiddenBatchNodeIds.has(id))) : new Set(current.filter((node) => !hiddenBatchNodeIds.has(node.id)).map((node) => node.id));
+            const positions = autoArrangeCanvasNodes(current, connectionsRef.current, targetIds);
+            if (!positions.size) return;
+            setNodes((prev) => applyCanvasNodePositions(prev, positions));
+            setDialogNodeId(null);
+        },
+        [hiddenBatchNodeIds],
+    );
+
+    const alignSelectedCanvasNodes = useCallback((action: CanvasLayoutAction) => {
+        const positions = alignCanvasNodes(nodesRef.current, selectedNodeIdsRef.current, action);
+        if (!positions.size) return;
+        setNodes((prev) => applyCanvasNodePositions(prev, positions));
+        setDialogNodeId(null);
+    }, []);
     const relatedHighlight = useMemo(() => {
         const nodeIds = new Set<string>();
         const connectionIds = new Set<string>();
@@ -1252,6 +1278,8 @@ function InfiniteCanvasPage() {
             hasMoved: false,
             startX: event.clientX,
             startY: event.clientY,
+            lastDx: 0,
+            lastDy: 0,
             initialSelectedNodes: currentNodes.filter((node) => dragIds.has(node.id)).map((node) => ({ id: node.id, x: node.position.x, y: node.position.y })),
         };
         historyPausedRef.current = true;
@@ -1268,15 +1296,15 @@ function InfiniteCanvasPage() {
 
         const wasClick = !dragRef.current.hasMoved && dragRef.current.initialSelectedNodes.length === 1;
         const clickedNodeId = dragRef.current.initialSelectedNodes[0]?.id;
-        const currentViewport = viewportRef.current;
-        const dx = clientX == null ? 0 : (clientX - dragRef.current.startX) / currentViewport.k;
-        const dy = clientY == null ? 0 : (clientY - dragRef.current.startY) / currentViewport.k;
+        const dx = dragRef.current.lastDx;
+        const dy = dragRef.current.lastDy;
         const initialPositions = dragRef.current.initialSelectedNodes;
 
         historyPausedRef.current = false;
         nodeDraggingRef.current = false;
         setIsNodeDragging(false);
-        if (dragRef.current.hasMoved && clientX != null && clientY != null) {
+        setAlignmentGuides({});
+        if (dragRef.current.hasMoved) {
             setNodes((prev) =>
                 prev.map((node) => {
                     const initial = initialPositions.find((item) => item.id === node.id);
@@ -1310,13 +1338,25 @@ function InfiniteCanvasPage() {
                 if (Math.abs(event.clientX - dragRef.current.startX) > 3 || Math.abs(event.clientY - dragRef.current.startY) > 3) {
                     dragRef.current.hasMoved = true;
                 }
+                if (!dragRef.current.hasMoved) return;
+
+                const currentNodes = nodesRef.current;
+                const movingIds = new Set(initialPositions.map((item) => item.id));
+                const movingNodes = initialPositions.flatMap((initial) => {
+                    const node = currentNodes.find((item) => item.id === initial.id);
+                    return node && !hiddenBatchNodeIds.has(node.id) ? [{ id: node.id, width: node.width, height: node.height, position: { x: initial.x, y: initial.y } }] : [];
+                });
+                const snapped = event.altKey ? { dx, dy, guides: {} } : snapCanvasDrag(currentNodes.filter((node) => !movingIds.has(node.id) && !hiddenBatchNodeIds.has(node.id)), movingNodes, dx, dy, currentViewport.k);
+                dragRef.current.lastDx = snapped.dx;
+                dragRef.current.lastDy = snapped.dy;
+                setAlignmentGuides(snapped.guides);
 
                 if (rafRef.current) cancelAnimationFrame(rafRef.current);
                 rafRef.current = requestAnimationFrame(() => {
                     setNodes((prev) =>
                         prev.map((node) => {
                             const initial = initialPositions.find((item) => item.id === node.id);
-                            return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
+                            return initial ? { ...node, position: { x: initial.x + snapped.dx, y: initial.y + snapped.dy } } : node;
                         }),
                     );
                     rafRef.current = null;
@@ -1331,7 +1371,7 @@ function InfiniteCanvasPage() {
                 setMouseWorld(screenToCanvas(event.clientX, event.clientY));
             }
         },
-        [finishNodeDrag, getConnectionDropTarget, screenToCanvas],
+        [finishNodeDrag, getConnectionDropTarget, hiddenBatchNodeIds, screenToCanvas],
     );
 
     const handleGlobalPointerMove = useCallback(
@@ -2834,6 +2874,19 @@ function InfiniteCanvasPage() {
                         {connectingParams ? <ActiveConnectionPath node={nodeById.get(connectingParams.nodeId)} handle={connectingParams} mouseWorld={mouseWorld} target={connectionTargetNodeId ? nodeById.get(connectionTargetNodeId) : undefined} /> : null}
                     </svg>
 
+                    {alignmentGuides.x !== undefined ? (
+                        <div
+                            className="pointer-events-none absolute z-[90]"
+                            style={{ left: alignmentGuides.x, top: viewportBounds.top, width: 1 / viewport.k, height: viewportBounds.bottom - viewportBounds.top, background: theme.canvas.selectionStroke }}
+                        />
+                    ) : null}
+                    {alignmentGuides.y !== undefined ? (
+                        <div
+                            className="pointer-events-none absolute z-[90]"
+                            style={{ left: viewportBounds.left, top: alignmentGuides.y, width: viewportBounds.right - viewportBounds.left, height: 1 / viewport.k, background: theme.canvas.selectionStroke }}
+                        />
+                    ) : null}
+
                     {visibleNodes.map((node) => (
                         <CanvasNode
                             key={node.id}
@@ -2973,6 +3026,7 @@ function InfiniteCanvasPage() {
 
                 <CanvasToolbar
                     selectedCount={selectedNodeIds.size}
+                    nodeCount={layoutNodeCount}
                     canUndo={historyState.canUndo}
                     canRedo={historyState.canRedo}
                     backgroundMode={backgroundMode}
@@ -2986,6 +3040,8 @@ function InfiniteCanvasPage() {
                     onRedo={redoCanvas}
                     onUpload={() => handleUploadRequest()}
                     onSaveNodeGroup={saveSelectedNodeGroup}
+                    onAutoLayout={autoLayoutCanvas}
+                    onAlign={alignSelectedCanvasNodes}
                     onDelete={() => deleteNodes(new Set(selectedNodeIds))}
                     onClear={() => setClearConfirmOpen(true)}
                     onDeselect={deselectCanvas}
@@ -3475,6 +3531,22 @@ function isHiddenBatchChild(node: CanvasNodeData, nodes: CanvasNodeData[], colla
     const rootId = root.id;
     if (root && collapsingBatchIds?.has(rootId)) return false;
     return Boolean(root && !root.metadata?.imageBatchExpanded);
+}
+
+function applyCanvasNodePositions(nodes: CanvasNodeData[], positions: Map<string, Position>) {
+    const childOffsets = new Map<string, Position>();
+    nodes.forEach((node) => {
+        const next = positions.get(node.id);
+        if (!next) return;
+        const offset = { x: next.x - node.position.x, y: next.y - node.position.y };
+        node.metadata?.batchChildIds?.forEach((childId) => childOffsets.set(childId, offset));
+    });
+    return nodes.map((node) => {
+        const position = positions.get(node.id);
+        if (position) return { ...node, position };
+        const offset = childOffsets.get(node.id);
+        return offset ? { ...node, position: { x: node.position.x + offset.x, y: node.position.y + offset.y } } : node;
+    });
 }
 
 function findBatchRootForChild(node: CanvasNodeData, nodes: CanvasNodeData[]) {

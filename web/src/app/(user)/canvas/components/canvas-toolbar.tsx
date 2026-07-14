@@ -6,9 +6,11 @@ import { CircleDot, Eraser, FolderOpen, FolderPlus, Grid2x2, Hand, Image as Imag
 import { canvasThemes, type CanvasBackgroundMode, type CanvasColorTheme, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
+import type { CanvasLayoutAction } from "../utils/canvas-layout";
 
 export function CanvasToolbar({
     selectedCount,
+    nodeCount,
     canUndo,
     canRedo,
     backgroundMode,
@@ -22,6 +24,8 @@ export function CanvasToolbar({
     onRedo,
     onUpload,
     onSaveNodeGroup,
+    onAutoLayout,
+    onAlign,
     onDelete,
     onClear,
     onDeselect,
@@ -30,6 +34,7 @@ export function CanvasToolbar({
     onOpenMyAssets,
 }: {
     selectedCount: number;
+    nodeCount: number;
     canUndo: boolean;
     canRedo: boolean;
     backgroundMode: CanvasBackgroundMode;
@@ -43,6 +48,8 @@ export function CanvasToolbar({
     onRedo: () => void;
     onUpload: () => void;
     onSaveNodeGroup: () => void;
+    onAutoLayout: (scope: "selected" | "all") => void;
+    onAlign: (action: CanvasLayoutAction) => void;
     onDelete: () => void;
     onClear: () => void;
     onDeselect: () => void;
@@ -57,6 +64,7 @@ export function CanvasToolbar({
     const [hovered, setHovered] = useState<string | null>(null);
     const [tipX, setTipX] = useState(0);
     const [appearanceOpen, setAppearanceOpen] = useState(false);
+    const [layoutOpen, setLayoutOpen] = useState(false);
     const [panelX, setPanelX] = useState(0);
     const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: colorTheme === "dark" ? "0 12px 32px rgba(0,0,0,.26)" : "0 10px 30px rgba(15,23,42,.10)" };
     const hoverStyle = { background: theme.toolbar.itemHover, color: theme.toolbar.activeText };
@@ -111,10 +119,29 @@ export function CanvasToolbar({
                     onHover={setHovered}
                     onClick={(event) => {
                         setPanelX(getTipX(wrapRef.current, event.currentTarget));
+                        setLayoutOpen(false);
                         setAppearanceOpen((value) => !value);
                     }}
                 >
                     <Palette className="size-4.5" />
+                </ToolbarButton>
+                <ToolbarButton
+                    id="tool-layout"
+                    label="整理布局"
+                    active={layoutOpen}
+                    hovered={hovered}
+                    activeStyle={activeStyle}
+                    hoverStyle={hoverStyle}
+                    wrapRef={wrapRef}
+                    onTipX={setTipX}
+                    onHover={setHovered}
+                    onClick={(event) => {
+                        setPanelX(getTipX(wrapRef.current, event.currentTarget));
+                        setAppearanceOpen(false);
+                        setLayoutOpen((value) => !value);
+                    }}
+                >
+                    <Grid2x2 className="size-4.5" />
                 </ToolbarButton>
                 {selectedCount ? (
                     <>
@@ -190,6 +217,26 @@ export function CanvasToolbar({
                         </span>
                         <Switch size="small" checked={showImageInfo} onChange={onShowImageInfoChange} />
                     </div>
+                </div>
+            ) : null}
+
+            {layoutOpen ? (
+                <div
+                    className="pointer-events-auto absolute bottom-[64px] z-30 w-[280px] -translate-x-1/2 rounded-2xl border p-3 shadow-xl"
+                    style={{ left: panelX || "50%", background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
+                >
+                    <div className="px-1 pb-2 text-sm font-medium opacity-65">整理布局</div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button disabled={selectedCount < 2} onClick={() => onAutoLayout("selected")}>整理选中</Button>
+                        <Button disabled={nodeCount < 2} onClick={() => onAutoLayout("all")}>整理全部</Button>
+                    </div>
+                    <div className="mt-3 px-1 pb-1.5 text-[11px] font-medium opacity-50">批量对齐</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                        {layoutActions.map(({ action, label, minimum }) => (
+                            <Button key={action} className="!px-1 !text-xs" disabled={selectedCount < minimum} onClick={() => onAlign(action)}>{label}</Button>
+                        ))}
+                    </div>
+                    <div className="mt-3 px-1 text-[11px] leading-5 opacity-50">拖动节点自动吸附网格和对齐线，按住 Alt 可临时关闭。</div>
                 </div>
             ) : null}
         </div>
@@ -289,11 +336,23 @@ function toolLabel(id: string) {
     if (id === "tool-upload") return "上传素材";
     if (id === "tool-assets") return "我的素材";
     if (id === "tool-style") return "画布外观";
+    if (id === "tool-layout") return "整理布局";
     if (id === "tool-save-group") return "存为节点组";
     if (id === "tool-delete") return "删除选中";
     if (id === "tool-clear") return "清空画布";
     return "";
 }
+
+const layoutActions: { action: CanvasLayoutAction; label: string; minimum: number }[] = [
+    { action: "left", label: "左对齐", minimum: 2 },
+    { action: "center-x", label: "水平居中", minimum: 2 },
+    { action: "right", label: "右对齐", minimum: 2 },
+    { action: "top", label: "顶对齐", minimum: 2 },
+    { action: "center-y", label: "垂直居中", minimum: 2 },
+    { action: "bottom", label: "底对齐", minimum: 2 },
+    { action: "distribute-x", label: "水平等距", minimum: 3 },
+    { action: "distribute-y", label: "垂直等距", minimum: 3 },
+];
 
 function getTipX(wrap: HTMLDivElement | null, target: HTMLElement) {
     if (!wrap) return 0;
