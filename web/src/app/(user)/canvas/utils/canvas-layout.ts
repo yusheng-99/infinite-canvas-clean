@@ -217,6 +217,8 @@ function layoutGraphComponent(nodes: CanvasNodeData[], edges: GraphEdge[], batch
     let verticalScore = 0;
     let horizontalDirection = 0;
     let verticalDirection = 0;
+    let hasHorizontalEdge = false;
+    let hasVerticalEdge = false;
     componentEdges.forEach((edge) => {
         const from = nodeById.get(edge.fromNodeId)!;
         const to = nodeById.get(edge.toNodeId)!;
@@ -226,7 +228,21 @@ function layoutGraphComponent(nodes: CanvasNodeData[], edges: GraphEdge[], batch
         verticalScore += Math.abs(dy);
         horizontalDirection += dx;
         verticalDirection += dy;
+        if (Math.abs(dx) >= Math.abs(dy)) hasHorizontalEdge = true;
+        else hasVerticalEdge = true;
     });
+    if (hasHorizontalEdge && hasVerticalEdge) {
+        let right = Number.NEGATIVE_INFINITY;
+        let bottom = Number.NEGATIVE_INFINITY;
+        nodes.forEach((node) => {
+            const position = { x: Math.round(node.position.x / GRID_SIZE) * GRID_SIZE, y: Math.round(node.position.y / GRID_SIZE) * GRID_SIZE };
+            const size = layoutSize(node, batchLayouts);
+            positions.set(node.id, position);
+            right = Math.max(right, position.x + size.width);
+            bottom = Math.max(bottom, position.y + size.height);
+        });
+        return { right, bottom };
+    }
     const horizontal = horizontalScore >= verticalScore;
     const direction = (horizontal ? horizontalDirection : verticalDirection) < 0 ? -1 : 1;
     const groups = new Map<number, CanvasNodeData[]>();
