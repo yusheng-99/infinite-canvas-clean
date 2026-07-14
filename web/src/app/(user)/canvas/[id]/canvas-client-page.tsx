@@ -2214,16 +2214,20 @@ function InfiniteCanvasPage() {
                     const childIds = count > 1 ? Array.from({ length: count }, () => nanoid()) : [];
                     const targetIds = count > 1 ? childIds : [rootId];
                     pendingChildIds = isEmptyImageNode ? childIds : [rootId, ...childIds];
+                    const rootSize = { width: isEmptyImageNode ? sourceNode?.width || imageConfig.width : imageConfig.width, height: isEmptyImageNode ? sourceNode?.height || imageConfig.height : imageConfig.height };
+                    const childRows = Math.ceil(childIds.length / 2);
+                    const batchSize = childIds.length
+                        ? { width: rootSize.width + 120 + Math.min(2, childIds.length) * imageConfig.width + (childIds.length > 1 ? 36 : 0), height: Math.max(rootSize.height, childRows * imageConfig.height + Math.max(0, childRows - 1) * rowGap) }
+                        : rootSize;
+                    const defaultRootPosition = { x: parentPosition.x + parentConfig.width + gap, y: parentPosition.y + parentConfig.height / 2 - imageConfig.height / 2 };
+                    const rootPosition = isEmptyImageNode ? parentPosition : findGeneratedNodeSlot(nodeId, defaultRootPosition, batchSize, nodesRef.current, connectionsRef.current);
                     const rootNode: CanvasNodeData = {
                         id: rootId,
                         type: CanvasNodeType.Image,
                         title: effectivePrompt.slice(0, 32) || "Generated Image",
-                        position: {
-                            x: isEmptyImageNode ? parentPosition.x : parentPosition.x + parentConfig.width + gap,
-                            y: parentPosition.y + parentConfig.height / 2 - imageConfig.height / 2,
-                        },
-                        width: isEmptyImageNode ? sourceNode?.width || imageConfig.width : imageConfig.width,
-                        height: isEmptyImageNode ? sourceNode?.height || imageConfig.height : imageConfig.height,
+                        position: rootPosition,
+                        width: rootSize.width,
+                        height: rootSize.height,
                         metadata: {
                             prompt: effectivePrompt,
                             status: NODE_STATUS_LOADING,
@@ -2383,7 +2387,7 @@ function InfiniteCanvasPage() {
                         id: videoId,
                         type: CanvasNodeType.Video,
                         title: effectivePrompt.slice(0, 32) || "Generated Video",
-                        position: isEmptyVideoNode ? sourceNode.position : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y },
+                        position: isEmptyVideoNode ? sourceNode.position : findGeneratedNodeSlot(nodeId, { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y }, spec, nodesRef.current, connectionsRef.current),
                         width: isEmptyVideoNode ? sourceNode.width : spec.width,
                         height: isEmptyVideoNode ? sourceNode.height : spec.height,
                         metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, model: generationConfig.model, size: generationConfig.size, seconds: generationConfig.videoSeconds, vquality: generationConfig.vquality, generateAudio: generationConfig.videoGenerateAudio, watermark: generationConfig.videoWatermark, references: generationReferenceUrls(generationContext) },
@@ -2411,7 +2415,7 @@ function InfiniteCanvasPage() {
                         id: audioId,
                         type: CanvasNodeType.Audio,
                         title: effectivePrompt.slice(0, 32) || "Generated Audio",
-                        position: isEmptyAudioNode ? sourceNode.position : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y + ((sourceNode?.height || spec.height) - spec.height) / 2 },
+                        position: isEmptyAudioNode ? sourceNode.position : findGeneratedNodeSlot(nodeId, { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y + ((sourceNode?.height || spec.height) - spec.height) / 2 }, spec, nodesRef.current, connectionsRef.current),
                         width: isEmptyAudioNode ? sourceNode.width : spec.width,
                         height: isEmptyAudioNode ? sourceNode.height : spec.height,
                         metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, ...buildAudioGenerationMetadata(generationConfig) },
@@ -2438,13 +2442,15 @@ function InfiniteCanvasPage() {
                 const childIds = isConfigNode || editingTextNode ? Array.from({ length: textCount }, () => nanoid()) : [];
                 pendingChildIds = childIds;
                 if (isConfigNode || editingTextNode) {
+                    const textBatchHeight = textCount * textConfig.height + Math.max(0, textCount - 1) * 36;
+                    const textSlot = findGeneratedNodeSlot(nodeId, { x: parentPosition.x + parentConfig.width + 96, y: parentPosition.y + parentConfig.height / 2 - textBatchHeight / 2 }, { width: textConfig.width, height: textBatchHeight }, nodesRef.current, connectionsRef.current);
                     const childNodes: CanvasNodeData[] = childIds.map((id, index) => ({
                         id,
                         type: CanvasNodeType.Text,
                         title: effectivePrompt.slice(0, 32) || "Generated Text",
                         position: {
-                            x: parentPosition.x + parentConfig.width + 96,
-                            y: parentPosition.y + parentConfig.height / 2 - textConfig.height / 2 + (index - (textCount - 1) / 2) * (textConfig.height + 36),
+                            x: textSlot.x,
+                            y: textSlot.y + index * (textConfig.height + 36),
                         },
                         width: textConfig.width,
                         height: textConfig.height,
@@ -3310,6 +3316,32 @@ function videoMetadata(video: UploadedFile): CanvasNodeMetadata {
 
 function audioMetadata(audio: UploadedFile): CanvasNodeMetadata {
     return { content: audio.url, storageKey: audio.storageKey, status: "success", bytes: audio.bytes, mimeType: audio.mimeType || "audio/mpeg", durationMs: audio.durationMs };
+}
+
+function findGeneratedNodeSlot(sourceId: string, fallback: Position, size: { width: number; height: number }, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const outputIds = new Set(connections.filter((connection) => connection.fromNodeId === sourceId).map((connection) => connection.toNodeId));
+    const outputRoots = nodes.filter((node) => outputIds.has(node.id) && !node.metadata?.batchRootId);
+    const anchor = [...outputRoots].sort((a, b) => Math.abs(a.position.x - fallback.x) - Math.abs(b.position.x - fallback.x))[0];
+    const x = anchor?.position.x ?? fallback.x;
+    let y = fallback.y;
+    const obstacles = nodes.filter((node) => node.id !== sourceId && !node.metadata?.batchRootId).map((node) => nodeGroupBounds(node, nodes));
+    for (let attempt = 0; attempt <= obstacles.length; attempt += 1) {
+        const overlapping = obstacles.filter((bounds) => x < bounds.right + 36 && x + size.width + 36 > bounds.left && y < bounds.bottom + 48 && y + size.height + 48 > bounds.top);
+        if (!overlapping.length) break;
+        y = Math.max(...overlapping.map((bounds) => bounds.bottom)) + 48;
+    }
+    return { x, y };
+}
+
+function nodeGroupBounds(node: CanvasNodeData, nodes: CanvasNodeData[]) {
+    const childIds = new Set(node.metadata?.batchChildIds || []);
+    const members = [node, ...nodes.filter((item) => childIds.has(item.id))];
+    return {
+        left: Math.min(...members.map((item) => item.position.x)),
+        top: Math.min(...members.map((item) => item.position.y)),
+        right: Math.max(...members.map((item) => item.position.x + item.width)),
+        bottom: Math.max(...members.map((item) => item.position.y + item.height)),
+    };
 }
 
 function buildImageGenerationMetadata(type: CanvasImageGenerationType, config: AiConfig, count: number, references: ReferenceImage[]): CanvasNodeMetadata {
