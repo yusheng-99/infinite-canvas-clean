@@ -290,7 +290,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
-            <div className="absolute left-2 right-2 top-[-26px] z-[65]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            <div className="absolute left-2 top-[-26px] z-[65] overflow-hidden" style={{ width: Math.max(0, data.width - 16) }} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                 {isEditingTitle ? (
                     <input
                         ref={titleInputRef}
@@ -310,7 +310,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 ) : (
                     <button
                         type="button"
-                        className="block w-full truncate border-b border-dashed border-transparent px-0 py-0.5 text-left text-xs font-medium opacity-75 transition hover:border-current hover:opacity-100"
+                        className="block w-full overflow-hidden text-ellipsis whitespace-nowrap border-b border-dashed border-transparent px-0 py-0.5 text-left text-xs font-medium opacity-75 transition hover:border-current hover:opacity-100"
                         style={{ color: theme.node.text }}
                         title="双击修改节点名称"
                         onDoubleClick={(event) => {
