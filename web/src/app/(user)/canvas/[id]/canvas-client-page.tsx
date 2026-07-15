@@ -3325,7 +3325,7 @@ function findGeneratedNodeSlot(sourceId: string, fallback: Position, size: { wid
         if (column) column.bottom = Math.max(column.bottom, bounds.bottom);
         else columns.push({ x: node.position.x, bottom: bounds.bottom });
     });
-    const column = columns.sort((a, b) => a.bottom - b.bottom || b.x - a.x)[0];
+    const column = columns.sort((a, b) => a.bottom - b.bottom || a.x - b.x)[0];
     const x = column?.x ?? fallback.x;
     let y = column ? Math.max(fallback.y, column.bottom + 48) : fallback.y;
     const obstacles = nodes.filter((node) => node.id !== sourceId && !node.metadata?.batchRootId).map((node) => nodeGroupBounds(node, nodes));
