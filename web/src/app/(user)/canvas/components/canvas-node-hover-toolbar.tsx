@@ -15,8 +15,6 @@ import { IMAGE_QUICK_TOOLS_STORAGE_KEY, buildImageToolbarTools, defaultImageQuic
 type CanvasNodeHoverToolbarProps = {
     node: CanvasNodeData | null;
     viewport: ViewportTransform;
-    onKeep: (nodeId: string) => void;
-    onLeave: () => void;
     onInfo: (node: CanvasNodeData) => void;
     onEditText: (node: CanvasNodeData) => void;
     onDecreaseFont: (node: CanvasNodeData) => void;
@@ -52,8 +50,6 @@ type ToolbarTool = {
 export function CanvasNodeHoverToolbar({
     node,
     viewport,
-    onKeep,
-    onLeave,
     onInfo,
     onEditText,
     onDecreaseFont,
@@ -102,7 +98,6 @@ export function CanvasNodeHoverToolbar({
 
     if (!node) return null;
 
-    const activeNode = node;
     const left = viewport.x + (node.position.x + node.width / 2) * viewport.k;
     const top = viewport.y + node.position.y * viewport.k - 14;
     const isImage = node.type === CanvasNodeType.Image;
@@ -127,7 +122,6 @@ export function CanvasNodeHoverToolbar({
     const imageTools = buildImageToolbarTools(node, { onUpload, onToggleFreeResize, onMaskEdit, onCrop, onSplit, onUpscale, onSuperResolve, onAngle, onViewImage, onCopyPrompt: copyImagePrompt, onReversePrompt });
 
     function openImageToolSettings() {
-        onKeep(activeNode.id);
         setDraftImageToolIds(quickImageToolIds);
         setDraftShowImageToolLabels(showImageToolLabels);
         setImageToolSettingsOpen(true);
@@ -157,7 +151,6 @@ export function CanvasNodeHoverToolbar({
 
     const closeImageToolSettings = () => {
         setImageToolSettingsOpen(false);
-        onLeave();
     };
 
     const setDraftImageToolVisible = (id: ImageQuickToolId, visible: boolean) => {
@@ -182,10 +175,6 @@ export function CanvasNodeHoverToolbar({
             <div
                 className="absolute z-[70] flex h-12 -translate-x-1/2 -translate-y-full items-center overflow-visible rounded-[18px] border border-black/10 bg-white text-[15px] text-[#242529] shadow-[0_8px_28px_rgba(15,23,42,.12)]"
                 style={{ left, top }}
-                onMouseEnter={() => onKeep(node.id)}
-                onMouseLeave={() => {
-                    if (!imageToolSettingsOpen) onLeave();
-                }}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
@@ -219,8 +208,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
         if (!node) return "";
         return JSON.stringify(
             node,
-            (key, value) => {
-                if (key === "title") return undefined;
+            (_key, value) => {
                 if (key === "content" && typeof value === "string" && value.startsWith("data:image/")) {
                     return "[base64 image]";
                 }
@@ -256,6 +244,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                     {view === "info" ? (
                         <div className="thin-scrollbar h-full space-y-3 overflow-auto pr-1">
                             <InfoRow label="ID" value={node.id} />
+                            <InfoRow label="名称" value={node.title || "未命名节点"} />
                             <InfoRow label="类型" value={node.type === CanvasNodeType.Text ? "文本" : node.type === CanvasNodeType.Image ? "图片" : node.type === CanvasNodeType.Video ? "视频" : node.type === CanvasNodeType.Audio ? "音频" : "生成配置"} />
                             <InfoRow label="尺寸" value={`${Math.round(node.width)} x ${Math.round(node.height)}`} />
                             <InfoRow label="位置" value={`${Math.round(node.position.x)}, ${Math.round(node.position.y)}`} />

@@ -13,12 +13,13 @@ type InfiniteCanvasProps = {
     onViewportChange: (viewport: ViewportTransform) => void;
     onViewportInteraction?: () => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
+    onCanvasDoubleClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
     onContextMenu?: (event: React.MouseEvent) => void;
     onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
     children: React.ReactNode;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onViewportInteraction, onCanvasMouseDown, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onViewportInteraction, onCanvasMouseDown, onCanvasDoubleClick, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const contentRef = useRef<HTMLDivElement>(null);
     const gridRef = useRef<HTMLDivElement>(null);
@@ -126,6 +127,12 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
 
     };
 
+    const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest("[data-canvas-no-zoom],[data-node-id],[data-connection-id],[data-connection-create-menu]")) return;
+        onCanvasDoubleClick?.(event);
+    };
+
     useEffect(() => {
         const handlePointerMove = (event: PointerEvent) => {
             if (!panState.current.isPanning) return;
@@ -174,6 +181,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             className="relative h-full w-full cursor-default select-none overflow-hidden"
             style={{ background: theme.canvas.background }}
             onPointerDown={handlePointerDown}
+            onDoubleClick={handleDoubleClick}
             onWheel={handleWheel}
             onContextMenu={onContextMenu}
             onDragOver={(event) => event.preventDefault()}

@@ -42,6 +42,7 @@ type CanvasNodeProps = {
     onConnectStart: (event: React.MouseEvent, nodeId: string, handleType: "source" | "target") => void;
     onResize: (nodeId: string, width: number, height: number, position?: Position) => void;
     onContentChange: (nodeId: string, content: string) => void;
+    onTitleChange: (nodeId: string, title: string) => void;
     onToggleBatch?: (nodeId: string) => void;
     onSetBatchPrimary?: (node: CanvasNodeData) => void;
     onRetry?: (node: CanvasNodeData) => void;
@@ -101,6 +102,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onConnectStart,
     onResize,
     onContentChange,
+    onTitleChange,
     onToggleBatch,
     onSetBatchPrimary,
     onRetry,
@@ -112,6 +114,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [hovered, setHovered] = useState(false);
     const [isEditingContent, setIsEditingContent] = useState(false);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [titleDraft, setTitleDraft] = useState(data.title || "");
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
@@ -120,6 +124,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const imageBorderColor = isActive ? selectionBlue : isRelated && !isBatchChild ? theme.node.muted : "transparent";
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const titleInputRef = useRef<HTMLInputElement>(null);
     const resizeRef = useRef({
         isResizing: false,
         corner: "bottom-right" as ResizeCorner,
@@ -132,6 +137,23 @@ export const CanvasNode = React.memo(function CanvasNode({
         keepRatio: false,
         ratio: 1,
     });
+
+    useEffect(() => {
+        setTitleDraft(data.title || "");
+    }, [data.title]);
+
+    useEffect(() => {
+        if (!isEditingTitle) return;
+        titleInputRef.current?.focus();
+        titleInputRef.current?.select();
+    }, [isEditingTitle]);
+
+    const finishTitleEditing = useCallback(() => {
+        const title = titleDraft.trim() || data.title || "未命名节点";
+        setTitleDraft(title);
+        setIsEditingTitle(false);
+        if (title !== data.title) onTitleChange(data.id, title);
+    }, [data.id, data.title, onTitleChange, titleDraft]);
 
     useEffect(() => {
         const textarea = textareaRef.current;
@@ -268,6 +290,39 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
+            <div className="absolute left-2 right-2 top-[-26px] z-[65]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                {isEditingTitle ? (
+                    <input
+                        ref={titleInputRef}
+                        value={titleDraft}
+                        maxLength={64}
+                        className="h-6 w-full border-0 border-b border-dashed bg-transparent px-0 text-left text-xs font-medium outline-none"
+                        style={{ borderColor: theme.node.muted, color: theme.node.text }}
+                        onChange={(event) => setTitleDraft(event.target.value)}
+                        onBlur={finishTitleEditing}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                            }
+                        }}
+                    />
+                ) : (
+                    <button
+                        type="button"
+                        className="block w-full truncate border-b border-dashed border-transparent px-0 py-0.5 text-left text-xs font-medium opacity-75 transition hover:border-current hover:opacity-100"
+                        style={{ color: theme.node.text }}
+                        title="双击修改节点名称"
+                        onDoubleClick={(event) => {
+                            event.stopPropagation();
+                            setIsEditingTitle(true);
+                        }}
+                    >
+                        {data.title || "未命名节点"}
+                    </button>
+                )}
+            </div>
+
             <div
                 className="relative h-full w-full overflow-visible rounded-2xl border-2"
                 style={{
@@ -369,6 +424,7 @@ function areCanvasNodePropsEqual(prev: CanvasNodeProps, next: CanvasNodeProps) {
         prev.batchOpening === next.batchOpening &&
         prev.batchRecovering === next.batchRecovering &&
         prev.batchMotion === next.batchMotion &&
+        prev.onTitleChange === next.onTitleChange &&
         (!(prev.showPanel || next.showPanel) || prev.renderPanel === next.renderPanel) &&
         (next.isViewportInteracting || next.data.type !== CanvasNodeType.Config || prev.renderNodeContent === next.renderNodeContent)
     );
