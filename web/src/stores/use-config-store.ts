@@ -14,6 +14,7 @@ export type ModelChannel = {
     apiKey: string;
     apiFormat: ApiCallFormat;
     models: string[];
+    modelScripts?: Record<string, string>;
 };
 
 export type AiConfig = {
@@ -303,6 +304,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
         apiKey: channel?.apiKey || "",
         apiFormat,
         models: uniqueRawModels(channel?.models || []),
+        modelScripts: normalizeModelScripts(channel?.modelScripts),
     };
 }
 
@@ -365,6 +367,10 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
     };
 }
 
+export function resolveModelScript(config: AiConfig, value: string) {
+    return resolveModelChannel(config, value).modelScripts?.[modelOptionName(value)]?.trim() || "";
+}
+
 function normalizeChannels(config: AiConfig) {
     const persistedChannels = Array.isArray(config.channels) ? config.channels : [];
     const channels = persistedChannels.map((channel, index) =>
@@ -402,7 +408,7 @@ function mergeChannels(localChannels: ModelChannel[], serverChannels: ModelChann
     for (const channel of localChannels) channels.set(channel.id, channel);
     for (const channel of serverChannels) {
         const existing = channels.get(channel.id);
-        channels.set(channel.id, existing ? { ...existing, ...channel, models: uniqueRawModels([...existing.models, ...channel.models]) } : channel);
+        channels.set(channel.id, existing ? { ...existing, ...channel, models: uniqueRawModels([...existing.models, ...channel.models]), modelScripts: { ...existing.modelScripts, ...channel.modelScripts } } : channel);
     }
     return Array.from(channels.values());
 }
@@ -421,6 +427,10 @@ function uniqueRawModels(models: string[]) {
 
 function uniqueModelOptions(models: string[]) {
     return Array.from(new Set((models || []).map((model) => model.trim()).filter(Boolean)));
+}
+
+function normalizeModelScripts(scripts?: Record<string, string>) {
+    return Object.fromEntries(Object.entries(scripts || {}).map(([model, script]) => [model.trim(), script.trim()]).filter(([model, script]) => model && script));
 }
 
 export function buildApiUrl(baseUrl: string, path: string) {

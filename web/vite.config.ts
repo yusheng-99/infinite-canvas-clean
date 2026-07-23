@@ -21,4 +21,18 @@ export default defineConfig({
         __APP_VERSION__: JSON.stringify(localVersion),
         __APP_RELEASES__: JSON.stringify(parseChangelog(localChangelog)),
     },
+    server: {
+        proxy: {
+            "/api/prompt-manager": {
+                target: "https://prompt.vioaki.xyz",
+                changeOrigin: true,
+                rewrite: () => "/api/gallery",
+            },
+            "/api/catbox-upload": {
+                target: "https://catbox.moe",
+                changeOrigin: true,
+                rewrite: () => "/user/api.php",
+            },
+        },
+    },
 });

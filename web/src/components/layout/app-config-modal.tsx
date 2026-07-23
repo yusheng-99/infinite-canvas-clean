@@ -1,16 +1,17 @@
 "use client";
 
 import { App, Button, Form, Input, Modal, Progress, Segmented, Select, Tabs } from "antd";
-import { CircleAlert, Cloud, Play, Plus, RefreshCw, Trash2, Upload, Wifi } from "lucide-react";
+import { CircleAlert, Cloud, FileCode2, Play, Plus, RefreshCw, Trash2, Upload, Wifi } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
 import { fetchChannelModels } from "@/services/api/image";
+import { MODEL_SCRIPT_TEMPLATES } from "@/services/api/model-script";
 import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
 import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import { playImageSuccessSound } from "@/lib/image-success-sound";
-import { createModelChannel, defaultBaseUrlForApiFormat, filterModelsByCapability, modelOptionLabel, modelOptionsFromChannels, normalizeModelOptionValue, useConfigStore, type AiConfig, type ApiCallFormat, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { createModelChannel, defaultBaseUrlForApiFormat, filterModelsByCapability, modelOptionLabel, modelOptionName, modelOptionsFromChannels, normalizeModelOptionValue, resolveModelChannel, resolveModelScript, useConfigStore, type AiConfig, type ApiCallFormat, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 
 type ModelGroup = {
     capability: ModelCapability;
@@ -67,6 +68,8 @@ export function AppConfigModal() {
     const [syncingWebdav, setSyncingWebdav] = useState(false);
     const [webdavSyncStatus, setWebdavSyncStatus] = useState("");
     const [webdavDomainProgress, setWebdavDomainProgress] = useState(createWebdavDomainProgress);
+    const [scriptEditor, setScriptEditor] = useState<{ capability: "image" | "video"; model: string } | null>(null);
+    const [scriptDraft, setScriptDraft] = useState("");
     const config = useConfigStore((state) => state.config);
     const webdav = useConfigStore((state) => state.webdav);
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -108,6 +111,25 @@ export function AppConfigModal() {
     const updateChannelApiFormat = (channel: ModelChannel, apiFormat: ApiCallFormat) => {
         const baseUrl = !channel.baseUrl.trim() || channel.baseUrl.trim() === defaultBaseUrlForApiFormat(channel.apiFormat) ? defaultBaseUrlForApiFormat(apiFormat) : channel.baseUrl;
         updateChannel(channel.id, { apiFormat, baseUrl });
+    };
+
+    const openScriptEditor = (capability: ModelCapability, model: string) => {
+        if (capability !== "image" && capability !== "video") return;
+        if (!model) return message.warning(`请先选择${capability === "image" ? "生图" : "视频"}模型`);
+        setScriptDraft(resolveModelScript(config, model));
+        setScriptEditor({ capability, model });
+    };
+
+    const saveModelScript = () => {
+        if (!scriptEditor) return;
+        const channel = resolveModelChannel(config, scriptEditor.model);
+        const model = modelOptionName(scriptEditor.model);
+        const modelScripts = { ...channel.modelScripts };
+        if (scriptDraft.trim()) modelScripts[model] = scriptDraft.trim();
+        else delete modelScripts[model];
+        updateChannel(channel.id, { modelScripts });
+        setScriptEditor(null);
+        message.success(scriptDraft.trim() ? "自定义调用脚本已保存" : "已恢复默认调用");
     };
 
     const addChannel = () => {
@@ -351,7 +373,14 @@ export function AppConfigModal() {
                                 <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                     {modelGroups.map((group) => (
                                         <Form.Item key={group.modelKey} label={group.defaultLabel} className="mb-0">
-                                            <ModelPicker config={config} value={config[group.modelKey]} onChange={(model) => updateConfig(group.modelKey, model)} capability={group.capability} fullWidth />
+                                            <div className="flex gap-2">
+                                                <ModelPicker config={config} value={config[group.modelKey]} onChange={(model) => updateConfig(group.modelKey, model)} capability={group.capability} fullWidth />
+                                                {group.capability === "image" || group.capability === "video" ? (
+                                                    <Button icon={<FileCode2 className="size-4" />} onClick={() => openScriptEditor(group.capability, config[group.modelKey])}>
+                                                        {resolveModelScript(config, config[group.modelKey]) ? "已自定义" : "调用脚本"}
+                                                    </Button>
+                                                ) : null}
+                                            </div>
                                         </Form.Item>
                                     ))}
                                 </div>
@@ -496,6 +525,32 @@ export function AppConfigModal() {
                     },
                 ]}
             />
+            <Modal
+                open={Boolean(scriptEditor)}
+                title={`${scriptEditor?.capability === "video" ? "视频" : "生图"}自定义调用 · ${modelOptionName(scriptEditor?.model || "")}`}
+                width={900}
+                centered
+                onCancel={() => setScriptEditor(null)}
+                onOk={saveModelScript}
+                okText="保存"
+                cancelText="取消"
+            >
+                <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+                    脚本作为异步函数体运行，最后需要 return 结果；可直接使用 prompt、images、params、model、baseUrl、apiKey、http、request、poll、sleep、signal。留空保存将恢复系统默认调用。
+                </div>
+                <div className="mb-3 flex flex-wrap gap-2">
+                    <Button size="small" onClick={() => scriptEditor && setScriptDraft(MODEL_SCRIPT_TEMPLATES[scriptEditor.capability])}>插入 OpenAI 兼容模板</Button>
+                    <Button size="small" danger onClick={() => setScriptDraft("")}>恢复默认调用</Button>
+                </div>
+                <Input.TextArea
+                    value={scriptDraft}
+                    onChange={(event) => setScriptDraft(event.target.value)}
+                    rows={20}
+                    spellCheck={false}
+                    placeholder="// 留空使用系统默认调用"
+                    style={{ fontFamily: "Consolas, 'Courier New', monospace", fontSize: 13 }}
+                />
+            </Modal>
         </Modal>
     );
 }

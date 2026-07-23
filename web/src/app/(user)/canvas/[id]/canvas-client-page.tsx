@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Home, ImageIcon, Images, List, Menu, Music2, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
+import { BookOpen, Home, ImageIcon, Images, List, Menu, Music2, Plus, Redo2, Settings2, Trash2, Undo2, Upload, Video } from "lucide-react";
 import { saveAs } from "file-saver";
 
 import { requestEdit, requestGeneration, requestImageQuestion, type ImageRetryEvent } from "@/services/api/image";
@@ -17,6 +17,7 @@ import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { playImageSuccessSound } from "@/lib/image-success-sound";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
+import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { cropDataUrl, splitDataUrl, upscaleDataUrl } from "../utils/canvas-image-data";
@@ -38,13 +39,14 @@ import { InfiniteCanvas } from "../components/infinite-canvas";
 import { Minimap } from "../components/canvas-mini-map";
 import { CanvasNode } from "../components/canvas-node";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
+import { CanvasPromptSubmissionModal } from "../components/canvas-prompt-submission-modal";
 import { CanvasToolbar } from "../components/canvas-toolbar";
 import { AssetPickerModal, type InsertAssetPayload } from "../components/asset-picker-modal";
 import { CanvasZoomControls } from "../components/canvas-zoom-controls";
 import { useCanvasStore } from "../stores/use-canvas-store";
 import { buildCanvasResourceReferences, buildNodeMentionReferences } from "../utils/canvas-resource-references";
 import { createCanvasNodeGroup, instantiateCanvasNodeGroup } from "../utils/canvas-node-group";
-import { alignCanvasNodes, autoArrangeCanvasNodes, snapCanvasDrag, type CanvasAlignmentGuides, type CanvasLayoutAction } from "../utils/canvas-layout";
+import { alignCanvasNodes, autoArrangeCanvasNodes, canvasNodeLayoutBounds, snapCanvasDrag, type CanvasAlignmentGuides, type CanvasLayoutAction } from "../utils/canvas-layout";
 import {
     CanvasNodeType,
     type CanvasConnection,
@@ -212,12 +214,10 @@ function ImagePreviewModal({ open, src, title, onClose }: { open: boolean; src?:
             style={{
                 cursor: scale > 1 ? (drag ? "grabbing" : "grab") : "zoom-in",
                 background:
-                    "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.12), transparent 34%), radial-gradient(circle at 78% 72%, rgba(118,153,215,0.1), transparent 38%), rgba(12,14,18,0.24)",
-                backdropFilter: "blur(12px) saturate(1.18)",
-                WebkitBackdropFilter: "blur(12px) saturate(1.18)",
+                    "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.08), transparent 34%), radial-gradient(circle at 78% 72%, rgba(118,153,215,0.08), transparent 38%), #0c0e12",
             }}
         >
-            <img src={src} alt={title || "图片"} draggable={false} className="relative max-h-[92dvh] max-w-[94dvw] object-contain will-change-transform" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }} />
+            <img src={src} alt={title || "图片"} draggable={false} className="relative max-h-[92dvh] max-w-[94dvw] object-contain" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }} />
             <div className="pointer-events-none absolute left-5 top-5 flex items-center gap-2 rounded-full border border-white/25 bg-white/15 px-3 py-1.5 text-xs font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.18)] backdrop-blur-2xl">{Math.round(scale * 100)}%</div>
             <button
                 type="button"
@@ -414,6 +414,7 @@ function InfiniteCanvasPage() {
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
+    const [submissionNodeId, setSubmissionNodeId] = useState<string | null>(null);
     const [titleEditing, setTitleEditing] = useState(false);
     const [titleDraft, setTitleDraft] = useState("");
     const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
@@ -888,6 +889,7 @@ function InfiniteCanvasPage() {
     const superResolveNode = superResolveNodeId ? nodeById.get(superResolveNodeId) || null : null;
     const angleNode = angleNodeId ? nodeById.get(angleNodeId) || null : null;
     const previewNode = previewNodeId ? nodeById.get(previewNodeId) || null : null;
+    const submissionNode = submissionNodeId ? nodeById.get(submissionNodeId) || null : null;
     const hasMultipleSelectedNodes = selectedNodeIds.size > 1;
     const activeNodeId = hasMultipleSelectedNodes ? null : hoveredNodeId || (selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null);
     const batchChildCountById = useMemo(() => {
@@ -1031,6 +1033,7 @@ function InfiniteCanvasPage() {
             setMaskEditNodeId((current) => (current && allIds.has(current) ? null : current));
             setAngleNodeId((current) => (current && allIds.has(current) ? null : current));
             setPreviewNodeId((current) => (current && allIds.has(current) ? null : current));
+            setSubmissionNodeId((current) => (current && allIds.has(current) ? null : current));
             setRunningNodeId((current) => (current && allIds.has(current) ? null : current));
             setContextMenu((current) => (current?.type === "node" && allIds.has(current.nodeId) ? null : current));
             cleanupCanvasFiles({ projectId, nodes: nodesRef.current.filter((node) => !allIds.has(node.id)) });
@@ -1064,6 +1067,7 @@ function InfiniteCanvasPage() {
         setMaskEditNodeId(null);
         setAngleNodeId(null);
         setPreviewNodeId(null);
+        setSubmissionNodeId(null);
         setRunningNodeId(null);
         deselectCanvas();
         setClearConfirmOpen(false);
@@ -2826,6 +2830,7 @@ function InfiniteCanvasPage() {
                     onImportImage={() => handleUploadRequest()}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
+                    onPromptSelect={insertTextNode}
                 />
 
                 <InfiniteCanvas
@@ -3009,6 +3014,7 @@ function InfiniteCanvasPage() {
                     onUpload={(node) => handleUploadRequest(node.id)}
                     onDownload={downloadNodeImage}
                     onSaveAsset={(node) => void saveNodeAsset(node)}
+                    onSubmitPrompt={(node) => setSubmissionNodeId(node.id)}
                     onMaskEdit={(node) => setMaskEditNodeId(node.id)}
                     onCrop={(node) => setCropNodeId(node.id)}
                     onSplit={(node) => setSplitNodeId(node.id)}
@@ -3084,6 +3090,7 @@ function InfiniteCanvasPage() {
                 <input ref={imageInputRef} type="file" accept="image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav" className="hidden" onChange={handleImageInputChange} />
 
                 <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} />
+                <CanvasPromptSubmissionModal node={submissionNode} open={Boolean(submissionNode)} onClose={() => setSubmissionNodeId(null)} />
 
                 {cropNode?.metadata?.content ? <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={() => setCropNodeId(null)} onConfirm={(crop) => void cropImageNode(cropNode!, crop)} /> : null}
 
@@ -3141,6 +3148,7 @@ function CanvasTopBar({
     onImportImage,
     onUndo,
     onRedo,
+    onPromptSelect,
 }: {
     title: string;
     titleDraft: string;
@@ -3158,11 +3166,13 @@ function CanvasTopBar({
     onImportImage: () => void;
     onUndo: () => void;
     onRedo: () => void;
+    onPromptSelect: (prompt: string) => void;
 }) {
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
     const titleRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
 
     useEffect(() => {
         if (!isTitleEditing) return;
@@ -3228,12 +3238,16 @@ function CanvasTopBar({
                 </div>
 
                 <div className="pointer-events-auto flex items-center gap-1.5">
+                    <button type="button" className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm transition hover:bg-black/5 dark:hover:bg-white/10" style={{ color: theme.node.text }} onClick={() => setPromptLibraryOpen(true)} aria-label="提示词广场">
+                        <BookOpen className="size-4" /><span className="hidden sm:inline">提示词广场</span>
+                    </button>
                     <UserStatusActions
                         variant="canvas"
                         onOpenShortcuts={() => setShortcutsOpen(true)}
                     />
                 </div>
             </div>
+            <PromptSelectDialog open={promptLibraryOpen} onOpenChange={setPromptLibraryOpen} onSelect={onPromptSelect} />
             <Modal title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
                 <div className="space-y-2 border-t pt-4 text-sm" style={{ borderColor: theme.node.stroke }}>
                     <Shortcut keys={["拖动画布"]} value="平移视图" />
@@ -3316,9 +3330,9 @@ function findGeneratedNodeSlot(sourceId: string, fallback: Position, size: { wid
     const columns: { x: number; bottom: number }[] = [];
     [...outputRoots].sort((a, b) => a.position.x - b.position.x).forEach((node) => {
         const bounds = nodeGroupBounds(node, nodes);
-        const column = columns.find((item) => Math.abs(item.x - node.position.x) <= 64);
+        const column = columns.find((item) => Math.abs(item.x - bounds.left) <= 64);
         if (column) column.bottom = Math.max(column.bottom, bounds.bottom);
-        else columns.push({ x: node.position.x, bottom: bounds.bottom });
+        else columns.push({ x: bounds.left, bottom: bounds.bottom });
     });
     const column = columns.sort((a, b) => a.bottom - b.bottom || a.x - b.x)[0];
     const x = column?.x ?? fallback.x;
@@ -3334,12 +3348,12 @@ function findGeneratedNodeSlot(sourceId: string, fallback: Position, size: { wid
 
 function nodeGroupBounds(node: CanvasNodeData, nodes: CanvasNodeData[]) {
     const childIds = new Set(node.metadata?.batchChildIds || []);
-    const members = [node, ...nodes.filter((item) => childIds.has(item.id))];
+    const members = [node, ...nodes.filter((item) => childIds.has(item.id))].map(canvasNodeLayoutBounds);
     return {
-        left: Math.min(...members.map((item) => item.position.x)),
-        top: Math.min(...members.map((item) => item.position.y)),
-        right: Math.max(...members.map((item) => item.position.x + item.width)),
-        bottom: Math.max(...members.map((item) => item.position.y + item.height)),
+        left: Math.min(...members.map((item) => item.left)),
+        top: Math.min(...members.map((item) => item.top)),
+        right: Math.max(...members.map((item) => item.right)),
+        bottom: Math.max(...members.map((item) => item.bottom)),
     };
 }
 

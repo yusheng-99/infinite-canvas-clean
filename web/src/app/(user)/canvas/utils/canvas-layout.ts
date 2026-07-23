@@ -1,4 +1,5 @@
-import type { CanvasConnection, CanvasNodeData, Position } from "../types";
+import { NODE_DEFAULT_SIZE } from "../constants";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type Position } from "../types";
 
 export type CanvasLayoutAction = "left" | "center-x" | "right" | "top" | "center-y" | "bottom" | "distribute-x" | "distribute-y";
 
@@ -39,21 +40,21 @@ export function autoArrangeCanvasNodes(nodes: CanvasNodeData[], connections: Can
     const connectedIds = new Set(edges.flatMap((edge) => [edge.fromNodeId, edge.toNodeId]));
     const connected = layoutNodes.filter((node) => connectedIds.has(node.id));
     const isolated = layoutNodes.filter((node) => !connectedIds.has(node.id));
-    let connectedBottom = Math.min(...layoutNodes.map((node) => node.position.y));
+    let connectedBottom = Math.min(...layoutNodes.map((node) => canvasNodeLayoutBounds(node).top));
     graphComponents(connected, edges).forEach((component) => {
         const bounds = layoutGraphComponent(component, edges, batchLayouts, positions);
         connectedBottom = Math.max(connectedBottom, bounds.bottom);
     });
 
-    const originX = Math.min(...layoutNodes.map((node) => node.position.x));
-    const originY = Math.min(...layoutNodes.map((node) => node.position.y));
+    const originX = Math.min(...layoutNodes.map((node) => canvasNodeLayoutBounds(node).left));
+    const originY = Math.min(...layoutNodes.map((node) => canvasNodeLayoutBounds(node).top));
     let rowY = connected.length ? connectedBottom + 80 : originY;
     for (let index = 0; index < isolated.length; index += 4) {
         const row = isolated.slice(index, index + 4).sort(byPosition);
         let x = originX;
         row.forEach((node) => {
             const size = layoutSize(node, batchLayouts);
-            positions.set(node.id, { x, y: rowY });
+            setLayoutPosition(positions, node, x, rowY);
             x += size.width + HORIZONTAL_GAP;
         });
         rowY += Math.max(...row.map((node) => layoutSize(node, batchLayouts).height)) + VERTICAL_GAP;
@@ -63,7 +64,8 @@ export function autoArrangeCanvasNodes(nodes: CanvasNodeData[], connections: Can
         const root = nodeById.get(rootId);
         const rootPosition = positions.get(rootId) || root?.position;
         if (!rootPosition) return;
-        layout.children.forEach(({ node, position }) => positions.set(node.id, { x: rootPosition.x + position.x, y: rootPosition.y + position.y }));
+        const origin = layoutCellOrigin(root, rootPosition);
+        layout.children.forEach(({ node, position }) => setLayoutPosition(positions, node, origin.x + position.x, origin.y + position.y));
     });
     return positions;
 }
@@ -141,19 +143,21 @@ function createBatchLayout(root: CanvasNodeData, children: CanvasNodeData[]): Ba
     const columnWidths = [0, 0];
     const rowHeights: number[] = [];
     children.forEach((node, index) => {
-        columnWidths[index % 2] = Math.max(columnWidths[index % 2], node.width);
-        rowHeights[Math.floor(index / 2)] = Math.max(rowHeights[Math.floor(index / 2)] || 0, node.height);
+        const size = nodeLayoutSize(node);
+        columnWidths[index % 2] = Math.max(columnWidths[index % 2], size.width);
+        rowHeights[Math.floor(index / 2)] = Math.max(rowHeights[Math.floor(index / 2)] || 0, size.height);
     });
     const rowTops: number[] = [];
     rowHeights.reduce((top, height, index) => {
         rowTops[index] = top;
         return top + height + 36;
     }, 0);
-    const childStartX = root.width + HORIZONTAL_GAP;
+    const rootSize = nodeLayoutSize(root);
+    const childStartX = rootSize.width + HORIZONTAL_GAP;
     const childHeight = rowHeights.reduce((sum, height) => sum + height, 0) + Math.max(0, rowHeights.length - 1) * 36;
     return {
         width: childStartX + columnWidths[0] + (columnWidths[1] ? 36 + columnWidths[1] : 0),
-        height: Math.max(root.height, childHeight),
+        height: Math.max(rootSize.height, childHeight),
         children: children.map((node, index) => ({
             node,
             position: {
@@ -165,29 +169,49 @@ function createBatchLayout(root: CanvasNodeData, children: CanvasNodeData[]): Ba
 }
 
 function layoutSize(node: CanvasNodeData, batchLayouts: Map<string, BatchLayout>) {
-    return batchLayouts.get(node.id) || node;
+    return batchLayouts.get(node.id) || nodeLayoutSize(node);
+}
+
+function nodeLayoutSize(node: CanvasNodeData) {
+    return node.type === CanvasNodeType.Image && node.metadata?.generationType ? NODE_DEFAULT_SIZE[CanvasNodeType.Image] : node;
+}
+
+function layoutCellOrigin(node: CanvasNodeData, position = node.position) {
+    const size = nodeLayoutSize(node);
+    return { x: position.x - (size.width - node.width) / 2, y: position.y - (size.height - node.height) / 2 };
+}
+
+function setLayoutPosition(positions: Map<string, Position>, node: CanvasNodeData, x: number, y: number) {
+    const size = nodeLayoutSize(node);
+    positions.set(node.id, { x: x + (size.width - node.width) / 2, y: y + (size.height - node.height) / 2 });
+}
+
+export function canvasNodeLayoutBounds(node: CanvasNodeData) {
+    const size = nodeLayoutSize(node);
+    const origin = layoutCellOrigin(node);
+    return { left: origin.x, top: origin.y, right: origin.x + size.width, bottom: origin.y + size.height };
 }
 
 function compactMixedLayout(nodes: CanvasNodeData[], batchLayouts: Map<string, BatchLayout>, positions: Map<string, Position>) {
     const columns: { anchor: number; nodes: CanvasNodeData[] }[] = [];
     [...nodes]
-        .sort((a, b) => positions.get(a.id)!.x - positions.get(b.id)!.x)
+        .sort((a, b) => layoutCellOrigin(a, positions.get(a.id)!).x - layoutCellOrigin(b, positions.get(b.id)!).x)
         .forEach((node) => {
-            const x = positions.get(node.id)!.x;
+            const x = layoutCellOrigin(node, positions.get(node.id)!).x;
             const column = columns.at(-1);
             if (column && x - column.anchor <= VERTICAL_GAP) column.nodes.push(node);
             else columns.push({ anchor: x, nodes: [node] });
         });
-    const top = Math.min(...nodes.map((node) => positions.get(node.id)!.y));
+    const top = Math.min(...nodes.map((node) => layoutCellOrigin(node, positions.get(node.id)!).y));
     let x = columns[0]?.anchor || 0;
     let right = x;
     let bottom = top;
     columns.forEach((column) => {
         const width = Math.max(...column.nodes.map((node) => layoutSize(node, batchLayouts).width));
         let y = top;
-        column.nodes.sort((a, b) => positions.get(a.id)!.y - positions.get(b.id)!.y).forEach((node) => {
+        column.nodes.sort((a, b) => layoutCellOrigin(a, positions.get(a.id)!).y - layoutCellOrigin(b, positions.get(b.id)!).y).forEach((node) => {
             const size = layoutSize(node, batchLayouts);
-            positions.set(node.id, { x, y });
+            setLayoutPosition(positions, node, x, y);
             right = Math.max(right, x + size.width);
             bottom = Math.max(bottom, y + size.height);
             y += size.height + VERTICAL_GAP;
@@ -272,20 +296,20 @@ function layoutGraphComponent(nodes: CanvasNodeData[], edges: GraphEdge[], batch
     const groups = new Map<number, CanvasNodeData[]>();
     nodes.forEach((node) => groups.set(rank.get(node.id) || 0, [...(groups.get(rank.get(node.id) || 0) || []), node]));
     const orderedGroups = [...groups.keys()].sort((a, b) => a - b).map((key) => groups.get(key)!);
-    const originX = Math.min(...nodes.map((node) => node.position.x));
-    const originY = Math.min(...nodes.map((node) => node.position.y));
+    const originX = Math.min(...nodes.map((node) => canvasNodeLayoutBounds(node).left));
+    const originY = Math.min(...nodes.map((node) => canvasNodeLayoutBounds(node).top));
     let right = originX;
     let bottom = originY;
 
     if (horizontal) {
-        let cursor = direction > 0 ? originX : Math.max(...nodes.map((node) => node.position.x + layoutSize(node, batchLayouts).width));
+        let cursor = direction > 0 ? originX : Math.max(...nodes.map((node) => layoutCellOrigin(node).x + layoutSize(node, batchLayouts).width));
         orderedGroups.forEach((group) => {
             const width = Math.max(...group.map((node) => layoutSize(node, batchLayouts).width));
             const x = direction > 0 ? cursor : cursor - width;
             let y = originY;
             group.sort((a, b) => a.position.y - b.position.y).forEach((node) => {
                 const size = layoutSize(node, batchLayouts);
-                positions.set(node.id, { x, y });
+                setLayoutPosition(positions, node, x, y);
                 right = Math.max(right, x + size.width);
                 bottom = Math.max(bottom, y + size.height);
                 y += size.height + VERTICAL_GAP;
@@ -293,14 +317,14 @@ function layoutGraphComponent(nodes: CanvasNodeData[], edges: GraphEdge[], batch
             cursor = direction > 0 ? x + width + HORIZONTAL_GAP : x - HORIZONTAL_GAP;
         });
     } else {
-        let cursor = direction > 0 ? originY : Math.max(...nodes.map((node) => node.position.y + layoutSize(node, batchLayouts).height));
+        let cursor = direction > 0 ? originY : Math.max(...nodes.map((node) => layoutCellOrigin(node).y + layoutSize(node, batchLayouts).height));
         orderedGroups.forEach((group) => {
             const height = Math.max(...group.map((node) => layoutSize(node, batchLayouts).height));
             const y = direction > 0 ? cursor : cursor - height;
             let x = originX;
             group.sort((a, b) => a.position.x - b.position.x).forEach((node) => {
                 const size = layoutSize(node, batchLayouts);
-                positions.set(node.id, { x, y });
+                setLayoutPosition(positions, node, x, y);
                 right = Math.max(right, x + size.width);
                 bottom = Math.max(bottom, y + size.height);
                 x += size.width + VERTICAL_GAP;

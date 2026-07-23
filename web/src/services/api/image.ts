@@ -1,6 +1,7 @@
 import axios from "axios";
 
-import { buildApiUrl, resolveModelRequestConfig, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import { buildApiUrl, resolveModelRequestConfig, resolveModelScript, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import { normalizeModelScriptImages, runModelScript } from "./model-script";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
@@ -693,9 +694,15 @@ function parseGeminiImagePayload(payload: GeminiPayload) {
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
     const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
+    const script = resolveModelScript(config, config.model || config.imageModel);
     return requestImageWithRetry(
         config,
         async () => {
+            if (script) {
+                const quality = normalizeQuality(config.quality);
+                const result = await runModelScript({ script, config: requestConfig, prompt: withSystemPrompt(requestConfig, prompt), params: { size: resolveRequestSize(quality, config.size), quality, count: n }, signal: options?.signal });
+                return normalizeModelScriptImages(result).map((dataUrl) => ({ id: nanoid(), dataUrl }));
+            }
             if (requestConfig.apiFormat === "gemini") {
                 return await requestGeminiImages(requestConfig, prompt, [], n, options);
             }
@@ -726,10 +733,17 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
     const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
+    const script = resolveModelScript(config, config.model || config.imageModel);
     return requestImageWithRetry(
         config,
         async () => {
             const requestPrompt = buildImageReferencePromptText(prompt, references);
+            if (script) {
+                const quality = normalizeQuality(config.quality);
+                const images = await Promise.all(references.map((image) => imageToDataUrl(image)));
+                const result = await runModelScript({ script, config: requestConfig, prompt: withSystemPrompt(requestConfig, requestPrompt), images, params: { size: resolveRequestSize(quality, config.size), quality, count: n }, signal: options?.signal });
+                return normalizeModelScriptImages(result).map((dataUrl) => ({ id: nanoid(), dataUrl }));
+            }
             if (requestConfig.apiFormat === "gemini") {
                 if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
                 return await requestGeminiImages(requestConfig, requestPrompt, references, n, options);

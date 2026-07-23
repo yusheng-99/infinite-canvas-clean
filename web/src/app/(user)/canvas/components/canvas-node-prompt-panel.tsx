@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUp, LoaderCircle, Square } from "lucide-react";
-import { Button } from "antd";
+import { ArrowUp, BookOpen, LoaderCircle, Square } from "lucide-react";
+import { Button, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
+import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -40,6 +41,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const isUpstreamImageEdit = node.type === CanvasNodeType.Image && Boolean(node.metadata?.upstreamEditSourceId);
     const isEditingExistingContent = hasTextContent || hasImageContent;
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
+    const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
     const credits = requestCreditCost({ channelMode: config.channelMode, model: config.model, count: mode === "image" ? config.count : 1 });
 
     useEffect(() => {
@@ -78,6 +80,9 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
 
             <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
+                    <Tooltip title="提示词广场">
+                        <Button type="text" className="!h-10 !w-10 !min-w-10 !rounded-full !p-0" style={{ color: theme.node.text }} icon={<BookOpen className="size-4" />} onClick={() => setPromptLibraryOpen(true)} aria-label="提示词广场" />
+                    </Tooltip>
                     {mode === "image" ? (
                         <>
                             <ModelPicker config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability="image" onMissingConfig={() => openConfigDialog(true)} />
@@ -131,6 +136,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     </span>
                 </Button>
             </div>
+            <PromptSelectDialog open={promptLibraryOpen} onOpenChange={setPromptLibraryOpen} onSelect={updatePrompt} />
         </div>
     );
 }

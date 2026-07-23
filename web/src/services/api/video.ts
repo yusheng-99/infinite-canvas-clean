@@ -1,11 +1,13 @@
 import axios from "axios";
+import { nanoid } from "nanoid";
 
 import { dataUrlToFile } from "@/lib/image-utils";
 import { isRay314VideoModel, normalizeRay314Duration, normalizeRay314Resolution, normalizeRay314Size } from "@/lib/ray314-video";
 import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildSeedancePromptText, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
-import { buildApiUrl, modelOptionName, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, type AiConfig } from "@/stores/use-config-store";
+import { runModelScript } from "./model-script";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
@@ -24,8 +26,10 @@ type ApiEnvelope<T> = T | { code?: number | string; data?: T | null; msg?: strin
 type RequestOptions = { signal?: AbortSignal };
 
 export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string };
-export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "chatgpt2api"; model: string; url?: string };
+export type VideoGenerationTask = { id: string; provider: "openai" | "seedance" | "chatgpt2api" | "script"; model: string; url?: string };
 export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
+
+const scriptVideoResults = new Map<string, VideoGenerationResult>();
 
 function aiApiUrl(config: AiConfig, path: string) {
     return buildApiUrl(config.baseUrl, path);
@@ -56,6 +60,8 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
 export async function createVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] = [], videoReferences: ReferenceVideo[] = [], audioReferences: ReferenceAudio[] = [], options?: RequestOptions): Promise<VideoGenerationTask> {
     const selectedModel = (config.model || config.videoModel).trim();
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
+    const script = resolveModelScript(config, selectedModel);
+    if (script) return createScriptVideoTask(requestConfig, selectedModel, script, prompt, references, videoReferences, audioReferences, options);
     assertVideoConfig(requestConfig, requestConfig.model);
     if (isSeedanceVideoConfig(requestConfig)) {
         return createSeedanceTask(requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
@@ -68,10 +74,54 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
 }
 
 export async function pollVideoGenerationTask(config: AiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
+    if (task.provider === "script") {
+        const result = scriptVideoResults.get(task.id);
+        if (!result) return { status: "failed", error: "自定义调用结果已失效，请重新生成" };
+        scriptVideoResults.delete(task.id);
+        return { status: "completed", result };
+    }
     const requestConfig = resolveModelRequestConfig(config, task.model);
     assertVideoConfig(requestConfig, requestConfig.model);
     if (task.provider === "chatgpt2api") return task.url ? { status: "completed", result: await videoResultFromUrl(task.url, options) } : { status: "failed", error: "视频接口没有返回地址" };
     return task.provider === "seedance" ? pollSeedanceTask(requestConfig, task, options) : pollOpenAIVideoTask(requestConfig, task, options);
+}
+
+async function createScriptVideoTask(config: AiConfig, model: string, script: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
+    if (!config.model.trim()) throw new Error("请先配置视频模型");
+    if (!config.baseUrl.trim()) throw new Error("请先配置 Base URL");
+    if (!config.apiKey.trim()) throw new Error("请先配置 API Key");
+    if (videoReferences.length || audioReferences.length) throw new Error("自定义视频调用脚本暂不支持参考视频或参考音频");
+    const images = await Promise.all(references.map((image) => imageToDataUrl(image)));
+    const result = normalizeScriptVideoResult(await runModelScript({
+        script,
+        config,
+        prompt,
+        images,
+        params: {
+            seconds: normalizeVideoSeconds(config.videoSeconds),
+            size: normalizeVideoSize(config.size),
+            resolution: normalizeVideoResolution(config.vquality),
+            ratio: config.size,
+            generateAudio: boolConfig(config.videoGenerateAudio, true),
+            watermark: boolConfig(config.videoWatermark, false),
+        },
+        signal: options?.signal,
+    }));
+    const id = nanoid();
+    scriptVideoResults.set(id, result);
+    return { id, provider: "script", model };
+}
+
+function normalizeScriptVideoResult(result: unknown): VideoGenerationResult {
+    if (result instanceof Blob) return { blob: result };
+    if (typeof result === "string") return { url: result, mimeType: "video/mp4" };
+    if (result && typeof result === "object") {
+        const value = result as Record<string, unknown>;
+        if (value.blob instanceof Blob) return { blob: value.blob };
+        const url = [value.url, value.video_url, value.result_url].find((item) => typeof item === "string" && item) as string | undefined;
+        if (url) return { url, mimeType: "video/mp4" };
+    }
+    throw new Error("自定义调用脚本没有返回视频");
 }
 
 export async function storeGeneratedVideo(result: VideoGenerationResult): Promise<UploadedFile> {
