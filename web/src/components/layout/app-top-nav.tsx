@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Menu } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -20,20 +20,20 @@ export function AppTopNav() {
     return (
         <>
             {!hideHeader ? (
-                <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-border/70 bg-background/80 backdrop-blur-2xl">
+                <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border/50 bg-background/70 backdrop-blur-xl transition-all">
                     <div className="mx-auto flex h-full max-w-[1600px] items-stretch justify-between gap-5 px-4 sm:px-6 lg:px-8">
                         <div className="flex min-w-0 items-center">
-                            <Link to="/" className="flex h-full shrink-0 items-center gap-2.5 text-sm font-semibold leading-none tracking-tight text-foreground transition hover:text-primary">
-                                <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_8px_24px_rgba(37,99,235,.24)]">
+                            <Link to="/" className="flex h-full shrink-0 items-center gap-2 text-sm font-semibold leading-none tracking-tight text-foreground transition hover:opacity-90">
+                                <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
                                     <span
-                                        className="size-4 shrink-0 bg-current"
+                                        className="size-3.5 shrink-0 bg-current"
                                         style={{
                                             mask: "url(/logo.svg) center / contain no-repeat",
                                             WebkitMask: "url(/logo.svg) center / contain no-repeat",
                                         }}
                                     />
                                 </span>
-                                <span className="text-[15px] font-semibold">无限画布</span>
+                                <span className="text-sm font-semibold tracking-tight">无限画布</span>
                             </Link>
 
                             <button
@@ -46,7 +46,7 @@ export function AppTopNav() {
                                 <Menu className="size-5" />
                             </button>
 
-                            <nav className="hide-scrollbar ml-8 hidden h-16 min-w-0 items-center gap-1 overflow-x-auto md:flex">
+                            <nav className="hide-scrollbar ml-6 hidden h-14 min-w-0 items-center gap-1 overflow-x-auto md:flex">
                                 {navigationTools.map((tool) => {
                                     const Icon = tool.icon;
                                     const active = tool.slug === activeToolSlug;
@@ -55,11 +55,11 @@ export function AppTopNav() {
                                             key={tool.slug}
                                             to={`/${tool.slug}`}
                                             className={cn(
-                                                "relative flex h-full shrink-0 items-center gap-2 px-3 text-sm leading-6 transition after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:transition",
+                                                "relative flex h-full shrink-0 items-center gap-2 px-3 text-xs font-medium leading-5 transition-all duration-150 after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:transition-all",
                                                 active ? "font-semibold text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground",
                                             )}
                                         >
-                                            <Icon className={cn("size-4 transition", active && "text-primary")} />
+                                            <Icon className={cn("size-3.5 transition", active && "text-primary")} />
                                             <span className="truncate">{tool.label}</span>
                                         </Link>
                                     );
@@ -67,7 +67,7 @@ export function AppTopNav() {
                             </nav>
                         </div>
 
-                        <div className="my-auto flex h-9 min-w-0 items-center justify-end gap-2 justify-self-end whitespace-nowrap">
+                        <div className="my-auto flex h-8 min-w-0 items-center justify-end gap-2 justify-self-end whitespace-nowrap">
                             <UserStatusActions />
                         </div>
                     </div>
