@@ -1,26 +1,146 @@
-﻿"use client";
+"use client";
 
-import { useState } from "react";
-import { Check, Download, LayoutGrid, ListFilter, Pencil, Search, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Download, Pencil, Trash2, X } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Input, Segmented } from "antd";
+import { Button, Input } from "antd";
+
+import { resolveMediaUrl } from "@/services/file-storage";
+import { resolveImageUrl } from "@/services/image-storage";
 
 import { useCanvasStore, type CanvasProject } from "../stores/use-canvas-store";
 import { useCanvasUiStore } from "../stores/use-canvas-ui-store";
 import { exportCanvasProjects } from "../utils/canvas-export";
 
-function getProjectPreviewImages(project: CanvasProject): string[] {
-    const images: string[] = [];
-    for (const node of project.nodes) {
-        if (node.type === "image") {
-            const url = node.metadata?.imageUrl || node.metadata?.content;
-            if (url && typeof url === "string" && !images.includes(url)) {
-                images.push(url);
-                if (images.length >= 3) break;
-            }
+function collectMediaSources(obj: unknown, sources: Array<{ storageKey?: string; url?: string }> = [], visited = new Set<unknown>()) {
+    if (!obj || typeof obj !== "object" || visited.has(obj)) return sources;
+    visited.add(obj);
+
+    if (Array.isArray(obj)) {
+        for (const item of obj) {
+            collectMediaSources(item, sources, visited);
+        }
+        return sources;
+    }
+
+    const record = obj as Record<string, unknown>;
+
+    const storageKey =
+        typeof record.storageKey === "string" && record.storageKey.includes(":")
+            ? record.storageKey
+            : typeof record.imageStorageKey === "string" && record.imageStorageKey.includes(":")
+            ? record.imageStorageKey
+            : undefined;
+
+    const urlCandidates = [record.imageUrl, record.content, record.coverUrl, record.dataUrl, record.url, record.src];
+    let foundUrl: string | undefined;
+    for (const cand of urlCandidates) {
+        if (typeof cand === "string" && cand.trim()) {
+            foundUrl = cand.trim();
+            break;
         }
     }
-    return images;
+
+    if (storageKey || foundUrl) {
+        sources.push({ storageKey, url: foundUrl });
+    }
+
+    for (const key of Object.keys(record)) {
+        if (key === "viewport" || key === "connections") continue;
+        const val = record[key];
+        if (val && typeof val === "object") {
+            collectMediaSources(val, sources, visited);
+        }
+    }
+
+    return sources;
+}
+
+async function resolveProjectPreviewImages(project: CanvasProject): Promise<string[]> {
+    const rawSources = collectMediaSources(project.nodes);
+    const resolvedUrls: string[] = [];
+
+    for (const source of rawSources) {
+        if (resolvedUrls.length >= 8) break;
+
+        let url = "";
+        if (source.storageKey) {
+            if (source.storageKey.startsWith("image:")) {
+                url = await resolveImageUrl(source.storageKey, source.url || "");
+            } else {
+                url = await resolveMediaUrl(source.storageKey, source.url || "");
+            }
+        } else if (source.url) {
+            url = source.url;
+        }
+
+        if (url && typeof url === "string" && !resolvedUrls.includes(url)) {
+            resolvedUrls.push(url);
+        }
+    }
+
+    return resolvedUrls;
+}
+
+function PreviewGrid({ urls }: { urls: string[] }) {
+    const [validUrls, setValidUrls] = useState<string[]>(urls);
+
+    useEffect(() => {
+        setValidUrls(urls);
+    }, [urls]);
+
+    const handleImageError = (failedUrl: string) => {
+        setValidUrls((prev) => prev.filter((u) => u !== failedUrl));
+    };
+
+    const displayUrls = validUrls.slice(0, 3);
+    const count = displayUrls.length;
+
+    if (count === 0) {
+        return <div className="size-full bg-[radial-gradient(circle_at_2px_2px,rgba(37,99,235,.12)_1px,transparent_0)] bg-[size:14px_14px]" />;
+    }
+
+    const gridColsClass = count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3";
+
+    return (
+        <div className={`grid h-36 gap-1 p-2 ${gridColsClass}`}>
+            {displayUrls.map((url, i) => (
+                <img
+                    key={url + i}
+                    src={url}
+                    alt=""
+                    className="h-full w-full object-cover rounded-md border border-border/30"
+                    onError={() => handleImageError(url)}
+                />
+            ))}
+        </div>
+    );
+}
+
+function ListAvatarImage({ urls }: { urls: string[] }) {
+    const [index, setIndex] = useState(0);
+    const [failed, setFailed] = useState(false);
+
+    const currentUrl = urls[index];
+
+    if (failed || !currentUrl) {
+        return <div className="size-full bg-[radial-gradient(circle_at_1px_1px,rgba(37,99,235,.15)_1px,transparent_0)] bg-[size:10px_10px]" />;
+    }
+
+    return (
+        <img
+            src={currentUrl}
+            alt=""
+            className="size-full object-cover transition-transform group-hover:scale-105"
+            onError={() => {
+                if (index + 1 < urls.length) {
+                    setIndex(index + 1);
+                } else {
+                    setFailed(true);
+                }
+            }}
+        />
+    );
 }
 
 export function CanvasProjectCard({
@@ -42,9 +162,20 @@ export function CanvasProjectCard({
     const toggleSelected = useCanvasUiStore((state) => state.toggleSelectedProjectId);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
 
+    const [previewImages, setPreviewImages] = useState<string[]>([]);
+
+    useEffect(() => {
+        let active = true;
+        resolveProjectPreviewImages(project).then((urls) => {
+            if (active) setPreviewImages(urls);
+        });
+        return () => {
+            active = false;
+        };
+    }, [project]);
+
     const editing = editingId === project.id;
     const selected = selectedIds.includes(project.id);
-    const previewImages = getProjectPreviewImages(project);
 
     const open = () => navigate(`/canvas/${project.id}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`);
     const saveTitle = () => {
@@ -68,11 +199,7 @@ export function CanvasProjectCard({
                         aria-label={`选择 ${project.title}`}
                     />
                     <div className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted/60 border border-border/50">
-                        {previewImages[0] ? (
-                            <img src={previewImages[0]} alt="" className="size-full object-cover transition-transform group-hover:scale-105" />
-                        ) : (
-                            <div className="size-full bg-[radial-gradient(circle_at_1px_1px,rgba(37,99,235,.15)_1px,transparent_0)] bg-[size:10px_10px]" />
-                        )}
+                        <ListAvatarImage urls={previewImages} />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -120,15 +247,7 @@ export function CanvasProjectCard({
         >
             {/* Background preview grid */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20 transition-opacity duration-300 group-hover:opacity-30">
-                {previewImages.length > 0 ? (
-                    <div className="grid h-36 grid-cols-3 gap-1 p-2">
-                        {previewImages.map((url, i) => (
-                            <img key={i} src={url} alt="" className="h-full w-full object-cover rounded-md border border-border/30" />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="size-full bg-[radial-gradient(circle_at_2px_2px,rgba(37,99,235,.12)_1px,transparent_0)] bg-[size:14px_14px]" />
-                )}
+                <PreviewGrid urls={previewImages} />
             </div>
 
             <div className="relative z-10 flex items-start justify-between gap-3">

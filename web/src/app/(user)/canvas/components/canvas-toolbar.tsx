@@ -1,4 +1,4 @@
-﻿import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
 import { useRef, useState } from "react";
 import { Button, Popover, Segmented, Switch } from "antd";
 import { CircleDot, Eraser, FolderOpen, FolderPlus, Grid2x2, Hand, Image as ImageIcon, Info, Moon, Music2, Palette, Redo2, Settings2, Square, Sun, Trash2, Type, Undo2, Upload, Video } from "lucide-react";
