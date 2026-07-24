@@ -182,17 +182,13 @@ export function CanvasToolbar({
                     </div>
                 </Popover>
 
-                {selectedCount ? (
-                    <>
-                        <Divider theme={theme} />
-                        <ToolbarButton id="tool-save-group" label="存为节点组" hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onSaveNodeGroup}>
-                            <FolderPlus className="size-4" />
-                        </ToolbarButton>
-                        <ToolbarButton id="tool-delete" label={`删除 (${selectedCount})`} hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onDelete}>
-                            <Trash2 className="size-4 text-destructive" />
-                        </ToolbarButton>
-                    </>
-                ) : null}
+                <Divider theme={theme} />
+                <ToolbarButton id="tool-save-group" label="存为节点组" disabled={!selectedCount} hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onSaveNodeGroup}>
+                    <FolderPlus className="size-4" />
+                </ToolbarButton>
+                <ToolbarButton id="tool-delete" label={selectedCount ? `删除 (${selectedCount})` : "删除"} disabled={!selectedCount} hovered={hovered} hoverStyle={hoverStyle} wrapRef={wrapRef} onTipX={setTipX} onHover={setHovered} onClick={onDelete}>
+                    <Trash2 className={`size-4 ${selectedCount ? "text-destructive" : ""}`} />
+                </ToolbarButton>
             </div>
         </div>
     );

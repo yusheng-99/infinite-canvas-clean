@@ -20,7 +20,7 @@ export function PromptCard({ prompt, favorite, revealed, onOpen, onFavorite, onR
 
     const stop = (event: MouseEvent) => event.stopPropagation();
     return (
-        <article className="group relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-[0_14px_38px_rgba(31,45,75,.07)] transition duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_20px_48px_color-mix(in_srgb,var(--primary)_14%,transparent)]" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+        <article className="hover-float-card group relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-[0_14px_38px_rgba(31,45,75,.07)] hover:border-primary/40 hover:shadow-[0_20px_48px_color-mix(in_srgb,var(--primary)_14%,transparent)]" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
             <div role="button" tabIndex={0} className="block w-full cursor-pointer text-left" onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }}>
                 <div className="relative aspect-[4/3] overflow-hidden bg-secondary">
                     {images.length ? images.map((src, index) => <img key={`${src}-${index}`} src={src} alt={index ? "" : prompt.title} loading="lazy" className={cn("absolute inset-0 size-full object-cover transition duration-500", imageIndex === index ? "scale-100 opacity-100" : "scale-[1.02] opacity-0", restricted && !revealed && "blur-2xl scale-110")} />) : <div className="grid size-full place-items-center text-muted-foreground"><FileText className="size-10" /></div>}

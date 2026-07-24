@@ -275,7 +275,7 @@ export default function AssetsPage() {
                 </div>
 
                 <div className="mx-auto flex max-w-7xl flex-col gap-5">
-                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="grid gap-5 overflow-visible sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {visibleAssets.map((asset) => (
                             <AssetCard key={asset.id} asset={asset} onOpen={() => setPreviewAsset(asset)} onEdit={() => openEdit(asset)} onRename={() => setRenamingAsset(asset)} onCopy={copyAssetText} onDownload={downloadImage} onDelete={() => setDeletingAsset(asset)} />
                         ))}
@@ -421,9 +421,10 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const summary = assetSummary(asset);
     return (
+        <div className="hover-float-card h-full">
         <Card
             hoverable
-            className="overflow-hidden"
+            className="h-full overflow-hidden"
             styles={{ body: { padding: 0 } }}
             cover={
                 <button type="button" className="block h-36 w-full overflow-hidden text-left" onClick={onOpen}>
@@ -484,6 +485,7 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
                 </div>
             </div>
         </Card>
+        </div>
     );
 }
 

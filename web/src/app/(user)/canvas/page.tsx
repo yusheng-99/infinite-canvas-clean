@@ -157,7 +157,7 @@ export default function CanvasPage() {
                 {!hydrated ? (
                     <section className="workspace-panel flex min-h-[360px] items-center justify-center text-sm text-muted-foreground">正在加载画布...</section>
                 ) : filteredProjects.length ? (
-                    <div className={viewMode === "grid" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
+                    <div className={viewMode === "grid" ? "grid gap-4 overflow-visible sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3 overflow-visible"}>
                         {filteredProjects.map((project) => (
                             <CanvasProjectCard key={project.id} project={project} viewMode={viewMode} />
                         ))}

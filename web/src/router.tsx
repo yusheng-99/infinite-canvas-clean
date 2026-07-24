@@ -1,4 +1,4 @@
-﻿import { createBrowserRouter, Outlet } from "react-router-dom";
+import { createBrowserRouter, Outlet } from "react-router-dom";
 
 import UserLayout from "@/app/(user)/layout";
 import HomePage from "@/app/(user)/page";
@@ -7,6 +7,7 @@ import CanvasProjectPage from "@/app/(user)/canvas/[id]/page";
 import ImagePage from "@/app/(user)/image/page";
 import VideoPage from "@/app/(user)/video/page";
 import AssetsPage from "@/app/(user)/assets/page";
+import GalleryPage from "@/app/(user)/gallery/page";
 import PromptsPage from "@/app/(user)/prompts/page";
 import NotFound from "@/app/not-found";
 
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
             { path: "/image", element: <ImagePage /> },
             { path: "/video", element: <VideoPage /> },
             { path: "/assets", element: <AssetsPage /> },
+            { path: "/gallery", element: <GalleryPage /> },
             { path: "/prompts", element: <PromptsPage /> },
         ],
     },

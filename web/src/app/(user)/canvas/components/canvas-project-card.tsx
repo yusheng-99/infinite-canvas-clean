@@ -186,7 +186,7 @@ export function CanvasProjectCard({
     if (viewMode === "list") {
         return (
             <article
-                className="group relative flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border/70 bg-card p-4 transition-all duration-200 hover:border-primary/40 hover:bg-muted/30 hover:shadow-md"
+                className="hover-float-card group relative flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border/70 bg-card p-4 hover:border-primary/40 hover:bg-muted/30 hover:shadow-md"
                 onClick={() => !editing && open()}
             >
                 <div className="flex min-w-0 items-center gap-4">
@@ -242,7 +242,7 @@ export function CanvasProjectCard({
 
     return (
         <article
-            className="group relative flex min-h-[220px] cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+            className="hover-float-card group relative flex min-h-[220px] cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-border/70 bg-card p-5 shadow-sm hover:border-primary/40 hover:shadow-lg"
             onClick={() => !editing && open()}
         >
             {/* Background preview grid */}

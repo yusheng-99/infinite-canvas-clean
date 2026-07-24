@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, ImagePlus, LoaderCircle, PenLine, Plus, SlidersHorizontal, Sparkles, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, ImagePlus, LoaderCircle, PenLine, Plus, SlidersHorizontal, Sparkles, Trash2, Upload, LayoutGrid } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { App, Button, Checkbox, Drawer, Empty, Image, Input, Modal, Tag, Tooltip, Typography } from "antd";
@@ -21,6 +21,7 @@ import { playImageSuccessSound } from "@/lib/image-success-sound";
 import { requestEdit, requestGeneration } from "@/services/api/image";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { useGalleryStore } from "@/stores/use-gallery-store";
 import type { ReferenceImage } from "@/types/image";
 
 type GeneratedImage = {
@@ -79,6 +80,7 @@ export default function ImagePage() {
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const addAsset = useAssetStore((state) => state.addAsset);
+    const addGalleryItem = useGalleryStore((state) => state.addItem);
     const [prompt, setPrompt] = useState("");
     const [references, setReferences] = useState<ReferenceImage[]>([]);
     const [results, setResults] = useState<GenerationResult[]>([]);
@@ -228,6 +230,24 @@ export default function ImagePage() {
             metadata: { source: "image-page", prompt: prompt.trim() },
         });
         message.success("已加入我的素材");
+    };
+
+    const saveResultToGallery = async (image: GeneratedImage, index: number) => {
+        const stored = image.storageKey
+            ? { url: image.dataUrl, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType || "image/png" }
+            : await uploadImage(image.dataUrl);
+        await addGalleryItem({
+            title: `生成结果 ${index + 1}`,
+            url: stored.url,
+            storageKey: stored.storageKey,
+            width: stored.width,
+            height: stored.height,
+            bytes: stored.bytes,
+            mimeType: stored.mimeType,
+            source: "生图工作台",
+            note: prompt.trim(),
+        });
+        message.success("已加入画廊");
     };
 
     const insertPickedAsset = async (payload: InsertAssetPayload) => {
@@ -445,7 +465,7 @@ export default function ImagePage() {
                             <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                                 {results.map((result, index) =>
                                     result.status === "success" && result.image ? (
-                                        <ResultImageCard key={result.id} image={result.image} index={index} onEdit={addResultToReferences} onDownload={downloadImage} onSaveAsset={saveResultToAssets} />
+                                        <ResultImageCard key={result.id} image={result.image} index={index} onEdit={addResultToReferences} onDownload={downloadImage} onSaveAsset={saveResultToAssets} onSaveGallery={saveResultToGallery} />
                                     ) : result.status === "failed" ? (
                                         <FailedImageCard key={result.id} error={result.error || "生成失败"} onRetry={() => retryResult(index)} />
                                     ) : (
@@ -520,15 +540,17 @@ function ResultImageCard({
     onEdit,
     onDownload,
     onSaveAsset,
+    onSaveGallery,
 }: {
     image: GeneratedImage;
     index: number;
     onEdit: (image: GeneratedImage, index: number) => void;
     onDownload: (image: GeneratedImage, index: number) => void;
     onSaveAsset: (image: GeneratedImage, index: number) => void;
+    onSaveGallery: (image: GeneratedImage, index: number) => void;
 }) {
     return (
-        <div className="overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
+        <div className="hover-float-card overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
             <Image src={image.dataUrl} alt={`生成结果 ${index + 1}`} className="aspect-square object-cover" />
             <div className="space-y-2 border-t border-stone-200 px-3 py-2.5 dark:border-stone-800">
                 <div className="flex min-w-0 gap-x-2 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
@@ -538,15 +560,20 @@ function ResultImageCard({
                     <span>{formatBytes(image.bytes)}</span>
                     <span>{formatDuration(image.durationMs)}</span>
                 </div>
-                <div className="grid min-w-0 grid-cols-3 gap-2">
+                <div className="grid min-w-0 grid-cols-2 gap-2">
                     <Tooltip title="添加到素材">
                         <Button className={RESULT_ACTION_BUTTON_CLASS} size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => void onSaveAsset(image, index)}>
-                            添加到素材
+                            素材
+                        </Button>
+                    </Tooltip>
+                    <Tooltip title="加入画廊">
+                        <Button className={RESULT_ACTION_BUTTON_CLASS} size="small" icon={<LayoutGrid className="size-3.5" />} onClick={() => void onSaveGallery(image, index)}>
+                            画廊
                         </Button>
                     </Tooltip>
                     <Tooltip title="加入参考图">
                         <Button className={RESULT_ACTION_BUTTON_CLASS} size="small" icon={<PenLine className="size-3.5" />} onClick={() => void onEdit(image, index)}>
-                            加入参考图
+                            参考图
                         </Button>
                     </Tooltip>
                     <Tooltip title="下载">

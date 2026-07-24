@@ -19,6 +19,7 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import { useAssetStore } from "@/stores/use-asset-store";
+import { useGalleryStore } from "@/stores/use-gallery-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { cropDataUrl, splitDataUrl, upscaleDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
@@ -371,6 +372,7 @@ function InfiniteCanvasPage() {
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const addAsset = useAssetStore((state) => state.addAsset);
+    const addGalleryItem = useGalleryStore((state) => state.addItem);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const hydrated = useCanvasStore((state) => state.hydrated);
     const createProject = useCanvasStore((state) => state.createProject);
@@ -1762,6 +1764,25 @@ function InfiniteCanvasPage() {
         [addAsset, message],
     );
 
+
+    const saveNodeGallery = useCallback(
+        async (node: CanvasNodeData) => {
+            if (node.type !== CanvasNodeType.Image || !node.metadata?.content) return message.error("没有可保存的图片");
+            await addGalleryItem({
+                title: node.metadata?.prompt?.slice(0, 24) || node.title || "画布图片",
+                url: node.metadata.content,
+                storageKey: node.metadata.storageKey,
+                width: node.metadata.naturalWidth || node.width,
+                height: node.metadata.naturalHeight || node.height,
+                bytes: node.metadata.bytes || getDataUrlByteSize(node.metadata.content),
+                mimeType: node.metadata.mimeType || "image/png",
+                source: "Canvas",
+                note: node.metadata?.prompt,
+            });
+            message.success("已加入画廊");
+        },
+        [addGalleryItem, message],
+    );
     const createImageReversePromptNodes = useCallback(
         (node: CanvasNodeData) => {
             if (node.type !== CanvasNodeType.Image || !node.metadata?.content) {
@@ -3014,6 +3035,7 @@ function InfiniteCanvasPage() {
                     onUpload={(node) => handleUploadRequest(node.id)}
                     onDownload={downloadNodeImage}
                     onSaveAsset={(node) => void saveNodeAsset(node)}
+                    onSaveGallery={(node) => void saveNodeGallery(node)}
                     onSubmitPrompt={(node) => setSubmissionNodeId(node.id)}
                     onMaskEdit={(node) => setMaskEditNodeId(node.id)}
                     onCrop={(node) => setCropNodeId(node.id)}
