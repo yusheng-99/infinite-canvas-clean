@@ -1,4 +1,4 @@
-﻿type NativeKeyboardEventLike = {
+type NativeKeyboardEventLike = {
     isComposing?: boolean;
     keyCode?: number;
     which?: number;
