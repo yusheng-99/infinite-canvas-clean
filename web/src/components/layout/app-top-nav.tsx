@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu } from "lucide-react";
+import { motion } from "motion/react";
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 
@@ -95,12 +96,19 @@ export function AppTopNav() {
                                         className={cn(
                                             "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] transition-all duration-200",
                                             active
-                                                ? "bg-primary/10 font-semibold text-primary"
+                                                ? "font-semibold text-primary"
                                                 : "font-medium text-foreground hover:bg-foreground/[0.05] dark:hover:bg-white/[0.06]",
                                         )}
                                     >
-                                        <Icon className={cn("size-[18px] shrink-0", active ? "text-primary" : "text-foreground/60 group-hover:text-foreground")} />
-                                        <span className="truncate">{tool.label}</span>
+                                        {active ? (
+                                            <motion.span
+                                                layoutId="nav-active-pill"
+                                                className="absolute inset-0 rounded-lg bg-primary/10"
+                                                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                                            />
+                                        ) : null}
+                                        <Icon className={cn("relative z-10 size-[18px] shrink-0", active ? "text-primary" : "text-foreground/60 group-hover:text-foreground")} />
+                                        <span className="relative z-10 truncate">{tool.label}</span>
                                     </Link>
                                 );
                             })}
