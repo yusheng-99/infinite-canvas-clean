@@ -15,6 +15,7 @@ export enum CanvasNodeType {
     Config = "config",
     Video = "video",
     Audio = "audio",
+    Group = "group",
 }
 
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
@@ -33,6 +34,7 @@ export type CanvasNodeMetadata = {
     model?: string;
     size?: string;
     quality?: string;
+    background?: string;
     count?: number;
     seconds?: string;
     vquality?: string;
@@ -60,6 +62,7 @@ export type CanvasNodeMetadata = {
     retryCount?: number;
     isRetrying?: boolean;
     retryMessage?: string;
+    groupId?: string;
 };
 
 export type CanvasNodeData = {

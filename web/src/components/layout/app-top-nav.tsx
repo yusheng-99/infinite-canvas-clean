@@ -32,13 +32,19 @@ function LogoIcon() {
 export function AppTopNav() {
     const pathname = useLocation().pathname;
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
-    const hideHeader = /^\/canvas\/[^/]+/.test(pathname);
+    const isHome = pathname === "/";
+    const hideHeader = isHome || /^\/canvas\/[^/]+/.test(pathname);
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
 
     if (hideHeader) {
         return (
             <>
+                {isHome ? (
+                    <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
+                        <UserStatusActions />
+                    </div>
+                ) : null}
                 <MobileNavDrawer open={mobileNavOpen} activeToolSlug={activeToolSlug} onClose={() => setMobileNavOpen(false)} />
                 <AppConfigModal />
             </>

@@ -44,6 +44,7 @@ export type AiConfig = {
     audioModels: string[];
     quality: string;
     size: string;
+    background: string;
     count: string;
     canvasImageCount: string;
     imageRetryCount: string;
@@ -103,6 +104,7 @@ export const defaultConfig: AiConfig = {
     audioModels: ["default::gpt-4o-mini-tts"],
     quality: "auto",
     size: "auto",
+    background: "",
     count: "1",
     canvasImageCount: "3",
     imageRetryCount: "",
