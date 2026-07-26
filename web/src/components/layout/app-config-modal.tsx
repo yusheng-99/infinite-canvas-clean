@@ -548,7 +548,7 @@ export function AppConfigModal() {
                     rows={20}
                     spellCheck={false}
                     placeholder="// 留空使用系统默认调用"
-                    style={{ fontFamily: "Consolas, 'Courier New', monospace", fontSize: 13 }}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}
                 />
             </Modal>
         </Modal>

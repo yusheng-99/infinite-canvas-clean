@@ -63,6 +63,7 @@ import {
 } from "../types";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/media";
+import { ImagePreviewModal } from "@/components/image-preview-modal";
 
 type PendingConnectionCreate = {
     connection: ConnectionHandle;
@@ -97,8 +98,6 @@ const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
 const IMAGE_BATCH_STAGGER_MS = 900;
-const IMAGE_PREVIEW_MIN_SCALE = 0.25;
-const IMAGE_PREVIEW_MAX_SCALE = 6;
 const IMAGE_PROMPT_REVERSE_PRESET = `请根据参考图片反推一段适合用于 AI 生图的提示词。
 
 要求：
@@ -122,121 +121,6 @@ function createCanvasNode(type: CanvasNodeType, position: Position, metadata?: C
         height: spec.height,
         metadata: { ...spec.metadata, ...metadata },
     };
-}
-
-function clampImagePreviewScale(scale: number) {
-    return Math.min(IMAGE_PREVIEW_MAX_SCALE, Math.max(IMAGE_PREVIEW_MIN_SCALE, scale));
-}
-
-function ImagePreviewModal({ open, src, title, onClose }: { open: boolean; src?: string; title?: string; onClose: () => void }) {
-    const [scale, setScale] = useState(1);
-    const [offset, setOffset] = useState({ x: 0, y: 0 });
-    const [drag, setDrag] = useState<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
-
-    useEffect(() => {
-        if (!open) {
-            setScale(1);
-            setOffset({ x: 0, y: 0 });
-            setDrag(null);
-        }
-    }, [open, src]);
-
-    useEffect(() => {
-        if (!open) return;
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") onClose();
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => {
-            document.body.style.overflow = previousOverflow;
-            window.removeEventListener("keydown", handleKeyDown);
-        };
-    }, [onClose, open]);
-
-    const handleWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const rect = event.currentTarget.getBoundingClientRect();
-        setScale((currentScale) => {
-            const nextScale = clampImagePreviewScale(currentScale * (event.deltaY < 0 ? 1.14 : 1 / 1.14));
-            setOffset((currentOffset) => {
-                if (nextScale <= 1) return { x: 0, y: 0 };
-                const originX = event.clientX - rect.left - rect.width / 2 - currentOffset.x;
-                const originY = event.clientY - rect.top - rect.height / 2 - currentOffset.y;
-                const ratio = nextScale / currentScale;
-                return {
-                    x: currentOffset.x - originX * (ratio - 1),
-                    y: currentOffset.y - originY * (ratio - 1),
-                };
-            });
-            return nextScale;
-        });
-    }, []);
-
-    const handlePointerDown = useCallback(
-        (event: ReactPointerEvent<HTMLDivElement>) => {
-            if (event.button !== 0 || scale <= 1) return;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            setDrag({ pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: offset.x, originY: offset.y });
-        },
-        [offset.x, offset.y, scale],
-    );
-
-    const handlePointerMove = useCallback(
-        (event: ReactPointerEvent<HTMLDivElement>) => {
-            if (!drag || drag.pointerId !== event.pointerId) return;
-            event.preventDefault();
-            setOffset({ x: drag.originX + event.clientX - drag.startX, y: drag.originY + event.clientY - drag.startY });
-        },
-        [drag],
-    );
-
-    const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        setDrag((current) => (current?.pointerId === event.pointerId ? null : current));
-    }, []);
-
-    if (!open || !src) return null;
-
-    return (
-        <div
-            className="fixed inset-0 z-[1000] flex touch-none select-none items-center justify-center overflow-hidden"
-            data-canvas-no-zoom
-            role="dialog"
-            aria-modal="true"
-            aria-label="图片预览"
-            onWheel={handleWheel}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            onDoubleClick={onClose}
-            style={{
-                cursor: scale > 1 ? (drag ? "grabbing" : "grab") : "zoom-in",
-                background:
-                    "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.08), transparent 34%), radial-gradient(circle at 78% 72%, rgba(118,153,215,0.08), transparent 38%), #0c0e12",
-            }}
-        >
-            <img src={src} alt={title || "图片"} draggable={false} className="relative max-h-[92dvh] max-w-[94dvw] object-contain" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }} />
-            <div className="pointer-events-none absolute left-5 top-5 flex items-center gap-2 rounded-full border border-white/25 bg-white/15 px-3 py-1.5 text-xs font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.18)] backdrop-blur-2xl">{Math.round(scale * 100)}%</div>
-            <button
-                type="button"
-                className="absolute right-5 top-5 z-10 grid size-9 place-items-center rounded-full border border-white/25 bg-white/15 text-lg leading-none text-white shadow-[0_8px_30px_rgba(0,0,0,0.18)] backdrop-blur-2xl transition hover:bg-white/25"
-                onPointerDown={(event) => {
-                    event.stopPropagation();
-                }}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onClose();
-                }}
-                aria-label="关闭图片预览"
-            >
-                ×
-            </button>
-            <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-white/12 px-4 py-2 text-xs font-medium text-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.18)] backdrop-blur-2xl">滚轮缩放 · 双击关闭</div>
-        </div>
-    );
 }
 
 export default function CanvasPage() {

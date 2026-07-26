@@ -63,7 +63,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
             borderRadius: 10,
             borderRadiusLG: 14,
             controlHeight: 36,
-            fontFamily: 'Inter,"SF Pro Text","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",sans-serif',
+            fontFamily: 'Inter,"SF Pro Text","Segoe UI","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",sans-serif',
         },
         components: {
             Button: {

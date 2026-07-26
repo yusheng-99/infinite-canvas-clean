@@ -16,6 +16,13 @@ export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDraw
     return (
         <Drawer title="导航" placement="left" size={280} open={open} onClose={onClose} className="md:hidden">
             <div className="space-y-1">
+                <Link
+                    to="/"
+                    onClick={onClose}
+                    className="mb-2 flex items-center gap-3 rounded-xl px-3 py-3 text-base font-medium text-foreground transition hover:bg-foreground/[0.04]"
+                >
+                    返回首页
+                </Link>
                 {navigationTools.map((tool) => {
                     const Icon = tool.icon;
                     const active = tool.slug === activeToolSlug;
@@ -25,8 +32,10 @@ export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDraw
                             to={`/${tool.slug}`}
                             onClick={onClose}
                             className={cn(
-                                "flex items-center gap-3 rounded-lg px-3 py-3 text-base transition",
-                                active ? "bg-stone-100 font-medium text-stone-950 dark:bg-stone-800 dark:text-stone-100" : "text-stone-600 hover:bg-stone-100 hover:text-stone-950 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-100",
+                                "flex items-center gap-3 rounded-xl px-3 py-3 text-base transition",
+                                active
+                                    ? "bg-foreground/[0.07] font-medium text-foreground dark:bg-white/[0.1]"
+                                    : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
                             )}
                         >
                             <Icon className="size-5" />

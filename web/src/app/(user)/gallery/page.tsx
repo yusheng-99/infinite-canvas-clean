@@ -1,9 +1,10 @@
 "use client";
 
 import { Image as ImageIcon, Search, Trash2, Upload } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import { App, Button, Empty, Image, Input, Modal, Select } from "antd";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { App, Button, Empty, Input, Modal, Select } from "antd";
 
+import { ImagePreviewModal } from "@/components/image-preview-modal";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useGalleryStore } from "@/stores/use-gallery-store";
 import { readFileAsDataUrl } from "@/lib/image-utils";
@@ -28,6 +29,8 @@ export default function GalleryPage() {
         if (!q) return items;
         return items.filter((item) => `${item.title} ${item.source || ""} ${item.note || ""}`.toLowerCase().includes(q));
     }, [items, keyword]);
+
+    const previewItem = previewOpen ? filtered[previewIndex] : null;
 
     const handleUpload = async (files: FileList | null) => {
         if (!files?.length) return;
@@ -66,9 +69,12 @@ export default function GalleryPage() {
         message.success(`已从素材加入 ${count} 张`);
     };
 
+    const handlePrev = useCallback(() => setPreviewIndex((v) => (v - 1 + filtered.length) % filtered.length), [filtered.length]);
+    const handleNext = useCallback(() => setPreviewIndex((v) => (v + 1) % filtered.length), [filtered.length]);
+
     return (
         <main className="h-full overflow-auto bg-background text-foreground">
-            <div className="mx-auto flex min-h-full max-w-[1400px] flex-col px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto flex min-h-full max-w-[1600px] flex-col px-4 py-6 sm:px-6 lg:px-8">
                 <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <p className="text-[13px] font-medium tracking-[0.08em] text-muted-foreground">GALLERY</p>
@@ -103,9 +109,9 @@ export default function GalleryPage() {
                         </Empty>
                     </div>
                 ) : (
-                    <div className="mt-6 columns-2 gap-3 sm:columns-3 lg:columns-4 xl:columns-5">
+                    <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
                         {filtered.map((item, index) => (
-                            <div key={item.id} className="hover-float-card group relative mb-3 break-inside-avoid overflow-hidden rounded-2xl bg-card ring-1 ring-border/40 hover:ring-border">
+                            <div key={item.id} className="hover-float-card group relative overflow-hidden rounded-2xl bg-card ring-1 ring-border/40 hover:ring-border">
                                 <button
                                     type="button"
                                     className="block w-full text-left"
@@ -114,8 +120,8 @@ export default function GalleryPage() {
                                         setPreviewOpen(true);
                                     }}
                                 >
-                                    <img src={item.url} alt={item.title} className="block w-full object-cover" loading="lazy" />
-                                    <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-3 pb-3 pt-8 opacity-0 transition group-hover:opacity-100">
+                                    <img src={item.url} alt={item.title} className="block aspect-[4/3] w-full object-cover" loading="lazy" />
+                                    <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-4 pb-3 pt-10 opacity-0 transition group-hover:opacity-100">
                                         <span className="block truncate text-sm font-medium text-white">{item.title}</span>
                                     </span>
                                 </button>
@@ -142,20 +148,15 @@ export default function GalleryPage() {
                 )}
             </div>
 
-            <div className="hidden">
-                <Image.PreviewGroup
-                    preview={{
-                        visible: previewOpen,
-                        current: previewIndex,
-                        onVisibleChange: (visible) => setPreviewOpen(visible),
-                        onChange: (current) => setPreviewIndex(current),
-                    }}
-                >
-                    {filtered.map((item) => (
-                        <Image key={item.id} src={item.url} alt={item.title} />
-                    ))}
-                </Image.PreviewGroup>
-            </div>
+            <ImagePreviewModal
+                open={Boolean(previewItem)}
+                src={previewItem?.url}
+                title={previewItem?.title}
+                onClose={() => setPreviewOpen(false)}
+                onPrev={filtered.length > 1 ? handlePrev : undefined}
+                onNext={filtered.length > 1 ? handleNext : undefined}
+                counter={filtered.length > 1 ? `${previewIndex + 1}/${filtered.length}` : undefined}
+            />
 
             <Modal
                 title="从我的素材导入"

@@ -24,17 +24,6 @@ export default function IndexPage() {
                         自由延展。
                     </h1>
                     <p className="mx-auto mt-5 max-w-xl text-[17px] leading-7 text-muted-foreground">以画布组织思路，再用图像、视频与素材工作台把它变成作品。</p>
-                    <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-                        <Link
-                            to="/canvas"
-                            className="inline-flex h-11 items-center rounded-full bg-white px-6 text-sm font-medium text-neutral-900 transition hover:bg-white/90 dark:bg-white dark:text-neutral-900"
-                        >
-                            开始创作
-                        </Link>
-                        <Link to="/gallery" className="inline-flex h-11 items-center rounded-full px-5 text-sm font-medium text-primary transition hover:opacity-75">
-                            打开画廊
-                        </Link>
-                    </div>
                 </section>
 
                 <section className="mt-16 grid auto-rows-fr gap-6 overflow-visible px-1 sm:grid-cols-2 lg:grid-cols-3">
