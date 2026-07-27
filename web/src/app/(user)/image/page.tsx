@@ -666,7 +666,7 @@ function LogPanel({
                     删除
                 </Button>
             </div>
-            <div className="space-y-3">
+            <div className="content-fade-in space-y-3">
                 {logs.map((log) => (
                     <LogCard
                         key={log.id}
@@ -700,7 +700,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
                         {thumbnails.length ? (
                             <div className="mt-2 flex gap-1 overflow-hidden">
                                 {thumbnails.map((image, index) => (
-                                    <img key={`${log.id}-${index}`} src={image} alt="" className="size-8 shrink-0 rounded-md object-cover" />
+                                    <img key={`${log.id}-${index}`} src={image} alt="" className="size-8 shrink-0 rounded-md object-cover" loading="lazy" decoding="async" />
                                 ))}
                             </div>
                         ) : null}

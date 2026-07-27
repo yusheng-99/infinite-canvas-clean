@@ -109,7 +109,7 @@ export default function GalleryPage() {
                         </Empty>
                     </div>
                 ) : (
-                    <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="content-fade-in mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
                         {filtered.map((item, index) => (
                             <div key={item.id} className="hover-float-card group relative overflow-hidden rounded-2xl bg-card ring-1 ring-border/40 hover:ring-border">
                                 <button
@@ -120,7 +120,7 @@ export default function GalleryPage() {
                                         setPreviewOpen(true);
                                     }}
                                 >
-                                    <img src={item.url} alt={item.title} className="block aspect-[4/3] w-full object-cover" loading="lazy" />
+                                    <img src={item.url} alt={item.title} className="block aspect-[4/3] w-full object-cover" loading="lazy" decoding="async" />
                                     <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-4 pb-3 pt-10 opacity-0 transition group-hover:opacity-100">
                                         <span className="block truncate text-sm font-medium text-white">{item.title}</span>
                                     </span>

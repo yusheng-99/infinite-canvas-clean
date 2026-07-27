@@ -1,4 +1,4 @@
-import { createBrowserRouter, Outlet } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 
 import UserLayout from "@/app/(user)/layout";
 import HomePage from "@/app/(user)/page";
@@ -13,11 +13,7 @@ import NotFound from "@/app/not-found";
 
 export const router = createBrowserRouter([
     {
-        element: (
-            <UserLayout>
-                <Outlet />
-            </UserLayout>
-        ),
+        element: <UserLayout />,
         children: [
             { path: "/", element: <HomePage /> },
             { path: "/canvas", element: <CanvasPage /> },

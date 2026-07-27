@@ -275,7 +275,7 @@ export default function AssetsPage() {
                 </div>
 
                 <div className="mx-auto flex max-w-7xl flex-col gap-5">
-                    <div className="grid gap-5 overflow-visible sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="content-fade-in grid gap-5 overflow-visible sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {visibleAssets.map((asset) => (
                             <AssetCard key={asset.id} asset={asset} onOpen={() => setPreviewAsset(asset)} onEdit={() => openEdit(asset)} onRename={() => setRenamingAsset(asset)} onCopy={copyAssetText} onDownload={downloadImage} onDelete={() => setDeletingAsset(asset)} />
                         ))}
@@ -429,7 +429,7 @@ function AssetCard({ asset, onOpen, onEdit, onRename, onCopy, onDownload, onDele
             cover={
                 <button type="button" className="block h-36 w-full overflow-hidden text-left" onClick={onOpen}>
                     {cover ? (
-                        <img src={cover} alt={asset.title} className="size-full object-cover" />
+                        <img src={cover} alt={asset.title} className="size-full object-cover" loading="lazy" decoding="async" />
                     ) : (
                         <div className="flex size-full items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">
                             <span className="line-clamp-4">{asset.kind === "text" ? asset.data.content : asset.kind === "node-group" ? summary : "暂无封面"}</span>

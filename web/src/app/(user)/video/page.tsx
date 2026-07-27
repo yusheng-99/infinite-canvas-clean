@@ -631,7 +631,7 @@ function LogPanel({
                     删除
                 </Button>
             </div>
-            <div className="space-y-3">
+            <div className="content-fade-in space-y-3">
                 {logs.map((log) => (
                     <LogCard key={log.id} log={log} selected={selectedLogIds.includes(log.id)} active={activeLogId === log.id} onSelectedChange={(checked) => onSelectedLogIdsChange(checked ? [...selectedLogIds, log.id] : selectedLogIds.filter((id) => id !== log.id))} onClick={() => onPreviewLog(log)} />
                 ))}
