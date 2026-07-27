@@ -2,6 +2,8 @@
 
 ## Unreleased
 
++ [优化] 清理项目冗余：删除未被引用的死代码组件（canvas-size-picker、dia-text-reveal、image-generation-pending）与 use-user-store，以及 src/app/favicon.ico 和陈旧构建产物、日志文件。
+
 ## v0.1.5 - 2026-07-27
 
 + [优化] 页面切换增加进出场过渡：旧页面淡出上移、新页面淡入上移，衔接更顺滑；侧栏激活项高亮可滑动切换。
