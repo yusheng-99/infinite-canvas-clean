@@ -41,6 +41,7 @@ type AssetStore = {
 };
 
 const ASSET_STORE_KEY = "infinite-canvas:asset_store";
+const imageLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
 const videoLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
 
 const assetStorage: PersistStorage<AssetStore> = {
@@ -111,11 +112,15 @@ export const useAssetStore = create<AssetStore>()(
                 window.setTimeout(async () => {
                     const { useCanvasStore } = await import("@/app/(user)/canvas/stores/use-canvas-store");
                     const { useGalleryStore } = await import("@/stores/use-gallery-store");
+                    const imageLogs: unknown[] = [];
                     const videoLogs: unknown[] = [];
+                    await imageLogStore.iterate((log) => {
+                        imageLogs.push(log);
+                    });
                     await videoLogStore.iterate((log) => {
                         videoLogs.push(log);
                     });
-                    const usedData = { assets: get().assets, projects: useCanvasStore.getState().projects, videoLogs, gallery: useGalleryStore.getState().items, extra };
+                    const usedData = { assets: get().assets, projects: useCanvasStore.getState().projects, imageLogs, videoLogs, gallery: useGalleryStore.getState().items, extra };
                     await cleanupUnusedImages(usedData);
                     await cleanupUnusedMedia(usedData);
                 }, 0);

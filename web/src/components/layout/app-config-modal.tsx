@@ -5,6 +5,7 @@ import { CircleAlert, Cloud, FileCode2, Play, Plus, RefreshCw, Trash2, Upload, W
 import { useRef, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
+import { ConfigLocalStorage } from "@/components/layout/config-local-storage";
 import { fetchChannelModels } from "@/services/api/image";
 import { MODEL_SCRIPT_TEMPLATES } from "@/services/api/model-script";
 import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
@@ -470,6 +471,11 @@ export function AppConfigModal() {
                                 </Form.Item>
                             </Form>
                         ),
+                    },
+                    {
+                        key: "storage",
+                        label: "本地存储",
+                        children: <ConfigLocalStorage active={activeTab === "storage"} />,
                     },
                     {
                         key: "webdav",

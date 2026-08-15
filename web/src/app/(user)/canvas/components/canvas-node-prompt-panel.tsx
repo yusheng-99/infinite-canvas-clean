@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUp, BookOpen, LoaderCircle, Square } from "lucide-react";
-import { Button, Tooltip } from "antd";
+import { ArrowUp, BookOpen, LoaderCircle, Maximize2, Square } from "lucide-react";
+import { Button, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
@@ -42,11 +42,13 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const isEditingExistingContent = hasTextContent || hasImageContent;
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
     const [promptLibraryOpen, setPromptLibraryOpen] = useState(false);
+    const [expanded, setExpanded] = useState(false);
     const credits = requestCreditCost({ channelMode: config.channelMode, model: config.model, count: mode === "image" ? config.count : 1 });
 
     // 仅在切换到其它节点时重置输入框；同一节点生成完成后（内容写回自身导致 isEditingExistingContent 变化）保留用户输入
     useEffect(() => {
         setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");
+        setExpanded(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [node.id]);
 
@@ -69,15 +71,20 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
         >
-            <CanvasPromptChipInput
-                value={prompt}
-                references={mentionReferences}
-                onChange={updatePrompt}
-                onSubmit={submit}
-                className="thin-scrollbar h-24 w-full resize-none rounded-xl border px-3 py-2 text-sm leading-5 outline-none"
-                style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
-                placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent, isUpstreamImageEdit)}
-            />
+            <div className="relative">
+                <CanvasPromptChipInput
+                    value={prompt}
+                    references={mentionReferences}
+                    onChange={updatePrompt}
+                    onSubmit={submit}
+                    className="thin-scrollbar h-24 w-full resize-none rounded-xl border px-3 py-2 pr-11 text-sm leading-5 outline-none"
+                    style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
+                    placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent, isUpstreamImageEdit)}
+                />
+                <Tooltip title="放大编辑">
+                    <Button type="text" className="absolute right-1.5 top-1.5 !h-8 !w-8 !min-w-8 !rounded-full !p-0" style={{ color: theme.node.text }} icon={<Maximize2 className="size-3.5" />} onClick={() => setExpanded(true)} aria-label="放大编辑提示词" />
+                </Tooltip>
+            </div>
 
             <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
@@ -138,6 +145,19 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 </Button>
             </div>
             <PromptSelectDialog open={promptLibraryOpen} onOpenChange={setPromptLibraryOpen} onSelect={updatePrompt} />
+            <Modal title="编辑提示词" open={expanded} centered width={760} footer={null} destroyOnHidden onCancel={() => setExpanded(false)}>
+                <div data-canvas-no-zoom className="pt-2" onWheelCapture={(event) => event.stopPropagation()}>
+                    <div className="mb-2 text-xs text-muted-foreground">修改内容会立即同步到节点。</div>
+                    <CanvasPromptChipInput
+                        value={prompt}
+                        references={mentionReferences}
+                        onChange={updatePrompt}
+                        className="thin-scrollbar h-[52dvh] min-h-80 w-full overflow-y-auto rounded-xl border p-4 text-[15px] leading-6 outline-none"
+                        style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
+                        placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent, isUpstreamImageEdit)}
+                    />
+                </div>
+            </Modal>
         </div>
     );
 }

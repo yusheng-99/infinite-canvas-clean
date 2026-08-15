@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.6 - 2026-08-15
+
++ [新增] 增加提示词放大编辑、参考素材拖入、本地存储查看和 Freestylefly GPT Image 2 提示词源。
++ [修复] 本地缓存清理时保留生图工作台历史记录引用的图片。
 + [优化] 清理项目冗余：删除未被引用的死代码组件（canvas-size-picker、dia-text-reveal、image-generation-pending）与 use-user-store，以及 src/app/favicon.ico 和陈旧构建产物、日志文件。
 
 ## v0.1.5 - 2026-07-27

@@ -18,9 +18,11 @@ export type PromptData = { sections: PromptSection[]; commonTags?: string[]; sit
 export type LibraryPrompt = PromptItem & { sectionId: string; sectionTitle: string; isRestricted?: boolean };
 
 export const DEFAULT_PROMPT_SOURCE = "https://raw.githubusercontent.com/unknowlei/nanobanana-website/refs/heads/main/public/data.json";
+export const FREESTYLEFLY_PROMPT_SOURCE = "https://raw.githubusercontent.com/yukkcat/image-prompts/main/dist/sources/freestylefly-gpt-image-2.json";
 export const PROMPT_MANAGER_SOURCE = "/api/prompt-manager";
 export const PROMPT_SOURCES = [
     { label: "nanobanana-website", value: DEFAULT_PROMPT_SOURCE },
+    { label: "Freestylefly GPT Image 2", value: FREESTYLEFLY_PROMPT_SOURCE },
     { label: "Prompt-Manager", value: PROMPT_MANAGER_SOURCE },
 ] as const;
 
@@ -75,9 +77,30 @@ export function isRestrictedPrompt(prompt: LibraryPrompt) {
 
 function normalizePromptData(payload: unknown): PromptData {
     if (payload && typeof payload === "object" && Array.isArray((payload as PromptData).sections)) return payload as PromptData;
+    if (Array.isArray(payload)) {
+        const records = payload.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object");
+        if (!records.length) throw new Error("提示词数据格式不受支持");
+        const sourceId = stringValue(records[0].sourceId) || "prompt-source";
+        return { sections: [{ id: sourceId, title: sourceId === "freestylefly-gpt-image-2" ? "Freestylefly GPT Image 2" : "导入提示词", prompts: records.map(normalizeRegistryItem) }] };
+    }
     const records = payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown[] }).data) ? (payload as { data: Record<string, unknown>[] }).data : [];
     if (!records.length) throw new Error("提示词数据格式不受支持");
     return { sections: [{ id: "prompt-manager", title: "Prompt-Manager", prompts: records.map(normalizePromptManagerItem) }] };
+}
+
+function normalizeRegistryItem(item: Record<string, unknown>, index: number): PromptItem {
+    const createdAt = normalizeTimestamp(stringValue(item.createdAt));
+    return {
+        id: stringValue(item.id) || `source-${index}`,
+        title: stringValue(item.title) || `未命名-${index + 1}`,
+        content: stringValue(item.prompt),
+        createdAt: createdAt || undefined,
+        tags: stringArray(item.tags),
+        contributor: stringValue(item.author) || undefined,
+        notes: stringValue(item.description) || undefined,
+        images: stringArray([item.coverUrl]),
+        refs: stringArray(item.referenceImageUrls),
+    };
 }
 
 function normalizePromptManagerItem(item: Record<string, unknown>, index: number): PromptItem {
