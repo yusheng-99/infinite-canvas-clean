@@ -19,7 +19,7 @@ bun run build
 bun run start
 ```
 
-Run the published image with Docker Compose:
+Run the docs site with Docker Compose:
 
 ```bash
 docker compose up -d

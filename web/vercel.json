@@ -1,3 +1,7 @@
 {
-    "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+    "rewrites": [
+        { "source": "/api/prompt-manager", "destination": "https://prompt.vioaki.xyz/api/gallery" },
+        { "source": "/api/catbox-upload", "destination": "https://catbox.moe/user/api.php" },
+        { "source": "/(.*)", "destination": "/index.html" }
+    ]
 }

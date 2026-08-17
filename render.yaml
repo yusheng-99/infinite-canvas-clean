@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: infinite-canvas
+    name: infinite-canvas-clean
     runtime: docker
     plan: free
     autoDeployTrigger: off

@@ -81,7 +81,7 @@ docker run --rm -p 3000:3000 infinite-canvas
 
 ## New API 自动配置
 
-如果使用 New API，可在 `系统设置 -> 聊天方式 -> 添加聊天设置` 中填入：
+如果使用 New API，可参考上游在线体验 [canvas.best](https://canvas.best/) 的自动配置格式，在 `系统设置 -> 聊天方式 -> 添加聊天设置` 中填入：
 
 ```text
 https://canvas.best?apiKey={key}&baseUrl={address}
@@ -122,10 +122,10 @@ https://canvas.best?apiKey={key}&baseUrl={address}
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=basketikun%2Finfinite-canvas&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=yusheng-99%2Finfinite-canvas-clean&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=basketikun/infinite-canvas&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=basketikun/infinite-canvas&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=basketikun/infinite-canvas&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=yusheng-99/infinite-canvas-clean&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=yusheng-99/infinite-canvas-clean&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=yusheng-99/infinite-canvas-clean&type=date&legend=top-left" />
  </picture>
 </a>

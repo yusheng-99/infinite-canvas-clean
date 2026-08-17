@@ -13,20 +13,9 @@ export type PromptSubmissionPayload = {
 };
 
 const submitEndpoints = ["https://nanobanana-website.vercel.app/api/submit", "https://bmzxdlj.cn/api/submit"];
-const imgbbApiKey = "d24f035fac70f7c113badcb1f800b248";
 
-export async function uploadPromptSubmissionImage(blob: Blob) {
-    try {
-        return await uploadToCatbox(blob);
-    } catch {
-        const formData = new FormData();
-        formData.append("image", blob, `infinite-canvas-${Date.now()}.${blob.type.split("/")[1] || "png"}`);
-        const response = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbApiKey}`, { method: "POST", body: formData });
-        const result = await readJson(response);
-        const url = (result.data as { url?: string } | undefined)?.url || "";
-        if (!response.ok || !url) throw new Error(String(result.error || "图片上传失败"));
-        return url;
-    }
+export function uploadPromptSubmissionImage(blob: Blob) {
+    return uploadToCatbox(blob);
 }
 
 async function uploadToCatbox(blob: Blob) {
