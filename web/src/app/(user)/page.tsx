@@ -8,6 +8,7 @@ const descriptions: Record<string, string> = {
     image: "提示词生成画面",
     video: "画面延展成动态",
     assets: "收纳文本与媒体",
+    generated: "回看全部生成图片",
     gallery: "收藏生成图慢慢看",
     prompts: "浏览收藏提示词",
 };

@@ -1,4 +1,4 @@
-import { BookOpen, ImagePlus, Images, LayoutGrid, Maximize2, Video } from "lucide-react";
+import { BookOpen, History, ImagePlus, Images, LayoutGrid, Maximize2, Video } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -20,6 +20,11 @@ export const navigationTools = [
         slug: "assets",
         label: "我的素材",
         icon: Images,
+    },
+    {
+        slug: "generated",
+        label: "生成图库",
+        icon: History,
     },
     {
         slug: "gallery",

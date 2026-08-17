@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 const navGroups = [
     { label: "创作", slugs: ["canvas", "image", "video"] },
-    { label: "资源", slugs: ["assets", "gallery", "prompts"] },
+    { label: "资源", slugs: ["assets", "generated", "gallery", "prompts"] },
 ] as const;
 
 function LogoIcon() {
