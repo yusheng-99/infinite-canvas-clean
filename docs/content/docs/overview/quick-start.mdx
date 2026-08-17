@@ -9,7 +9,7 @@ description: 用最少步骤把无限画布跑起来
 
 ## Vercel 部署
 
-在 Vercel 中导入仓库即可，根目录 `vercel.json` 会构建 `web/`。当前版本的 AI 请求由浏览器前台直连用户自己的 OpenAI 兼容地址，不需要额外配置服务端。
+在 Vercel 中导入仓库后，将项目根目录设为 `web/`。Vercel 会按 `web/package.json` 构建，并使用 `web/vercel.json` 的路由配置。当前版本的 AI 请求由浏览器前台直连用户自己的 OpenAI 兼容地址，不需要额外配置服务端。
 
 ## 本地启动
 

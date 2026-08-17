@@ -94,7 +94,7 @@ export default function CanvasPage() {
                                 <Button disabled={!hydrated} icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects(projects.filter((project) => selectedIds.includes(project.id)), `无限画布-${selectedIds.length}个项目`)}>
                                     导出选中 ({selectedIds.length})
                                 </Button>
-                                <Button disabled={!hydrated} dangerously={true} icon={<Trash2 className="size-4" />} onClick={() => setDeleteIds(selectedIds)}>
+                                <Button disabled={!hydrated} danger icon={<Trash2 className="size-4" />} onClick={() => setDeleteIds(selectedIds)}>
                                     删除选中 ({selectedIds.length})
                                 </Button>
                             </>

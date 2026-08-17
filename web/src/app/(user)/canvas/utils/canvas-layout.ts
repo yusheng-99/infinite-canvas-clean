@@ -63,7 +63,7 @@ export function autoArrangeCanvasNodes(nodes: CanvasNodeData[], connections: Can
     batchLayouts.forEach((layout, rootId) => {
         const root = nodeById.get(rootId);
         const rootPosition = positions.get(rootId) || root?.position;
-        if (!rootPosition) return;
+        if (!root || !rootPosition) return;
         const origin = layoutCellOrigin(root, rootPosition);
         layout.children.forEach(({ node, position }) => setLayoutPosition(positions, node, origin.x + position.x, origin.y + position.y));
     });

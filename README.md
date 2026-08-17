@@ -56,7 +56,7 @@ docker run --rm -p 3000:3000 infinite-canvas
 
 首次打开后点右上角配置，填入自己的 OpenAI 兼容 `Base URL` 和 `API Key`，就可以开始生成了。
 
-也支持 Vercel 一键导入：根目录 `vercel.json` 会直接构建 `web/`，纯静态部署，不需要服务端环境变量。
+也支持 Vercel 部署：导入仓库后将项目根目录设为 `web/`，Vercel 会按 `web/package.json` 构建，使用 `web/vercel.json` 的路由配置，纯静态部署，不需要服务端环境变量。
 
 ## 数据与安全
 

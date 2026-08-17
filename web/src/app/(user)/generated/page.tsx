@@ -18,7 +18,7 @@ type GeneratedImageItem = {
     title: string;
     prompt: string;
     url: string;
-    storageKey?: string;
+    storageKey: string | undefined;
     width: number;
     height: number;
     bytes: number;
@@ -155,7 +155,7 @@ async function readWorkbenchImages(): Promise<GeneratedImageItem[]> {
     await imageLogStore.iterate<StoredGenerationLog, void>((log) => {
         logs.push(log);
     });
-    const items = await Promise.all(logs.flatMap((log) => (log.images || []).map(async (image, index) => {
+    const items = await Promise.all(logs.flatMap((log) => (log.images || []).map(async (image, index): Promise<GeneratedImageItem | null> => {
         const url = await resolveImageUrl(image.storageKey, image.dataUrl || "");
         if (!url) return null;
         const prompt = log.prompt || log.title || "生成图片";
@@ -165,7 +165,7 @@ async function readWorkbenchImages(): Promise<GeneratedImageItem[]> {
 }
 
 async function readCanvasImages(projects: CanvasProject[]): Promise<GeneratedImageItem[]> {
-    const items = await Promise.all(projects.flatMap((project) => project.nodes.filter((node) => node.type === CanvasNodeType.Image && node.metadata?.content && (node.metadata.generationType || node.metadata.model)).map(async (node) => {
+    const items = await Promise.all(projects.flatMap((project) => project.nodes.filter((node) => node.type === CanvasNodeType.Image && node.metadata?.content && (node.metadata.generationType || node.metadata.model)).map(async (node): Promise<GeneratedImageItem | null> => {
         const url = await resolveImageUrl(node.metadata?.storageKey, node.metadata?.content || "");
         if (!url) return null;
         const prompt = node.metadata?.prompt || node.title || "画布生成图片";
